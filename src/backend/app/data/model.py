@@ -1,0 +1,2 @@
+class AbstractModel:
+    name = 'biba'
