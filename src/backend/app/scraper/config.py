@@ -31,7 +31,7 @@ class Settings(BaseSettings):
     API_V1_STR: str = "/api/v1"
     DOCS_URL: str = "/api/docs"
     #Наименование сервера
-    SERVICE_NAME: str = "\'Automatic\' RTPI API scraper"
+    SERVICE_NAME: str = "'Automatic' RTPI API scraper"
     #Настройки для подключения к базе
     POSTGRES_SERVER: str
     POSTGRES_USER: str
@@ -39,11 +39,24 @@ class Settings(BaseSettings):
     POSTGRES_DB: str
     POSTGRES_PORT: Optional[str] = None
     SQLALCHEMY_DATABASE_URI: Optional[PostgresDsn] = None
+    ASYNC_SQLALCHEMY_DATABASE_URI: Optional[PostgresDsn] = None
     #Отобрадать детализацию по каждому запросу
     SESSION_ECHO: Optional[str] = 'False'
     #Валидация строки подключения
     @validator("SQLALCHEMY_DATABASE_URI", pre=True)
     def assemble_db_connection(cls, v: Optional[str], values: Dict[str, Any]) -> Any:
+        if isinstance(v, str):
+            return v
+        return PostgresDsn.build(
+            scheme="postgresql",
+            user=values.get("POSTGRES_USER"),
+            password=values.get("POSTGRES_PASSWORD"),
+            host=values.get("POSTGRES_SERVER"),
+            port=values.get("POSTGRES_PORT") or '5432',
+            path=f"/{values.get('POSTGRES_DB') or ''}",
+        )
+    @validator("ASYNC_SQLALCHEMY_DATABASE_URI", pre=True)
+    def assemble_async_db_connection(cls, v: Optional[str], values: Dict[str, Any]) -> Any:
         if isinstance(v, str):
             return v
         return PostgresDsn.build(
@@ -57,7 +70,16 @@ class Settings(BaseSettings):
     #Настройки API-источника 
     RTPI_API_TOKEN: str
     RTPI_REQUEST_BASEURL: str
-    
+    #Общее время ожидание запроса,
+    #включающее соединение, отправку и чтение запроса
+    CLIENT_TIMEOUT_GET_COUNT: str = '600' #секунд
+    CLIENT_TIMEOUT_GET_CONTENT: str = '180'
+    CLIENT_RETRY_ATTEMPTS: str = '3'
+    #Настройки для APScheduler
+    MAX_INSTANCES: str = '2'
+    COALESCE: str = 'True'
+    MAX_WORKERS: str = '4'
+    TABLE_LIMIT: str = '100000'
     #Настройки для Pydantic BaseSettings
     class Config:
         env_file = '~/.env'

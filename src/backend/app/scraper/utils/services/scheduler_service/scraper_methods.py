@@ -1,0 +1,408 @@
+import asyncio
+import datetime
+from dateutil import parser
+from aiohttp import ClientTimeout
+import logging
+import copy
+from yarl import URL
+from typing import Any, List
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import select
+import random
+from sqlalchemy.dialects.postgresql import insert
+import asyncpg
+
+from ...help_func import JobHelper
+from scraper.config import settings
+from scraper.utils.services.scheduler_service import scheduler_service
+from .session import ScraperSession
+from scraper.db.base_class import Base
+from scraper.models import (
+    RtpiPrice,
+    RtpiStoreId,
+    RtpiPricePage,
+    RtpiProductName
+)
+from scraper.db.session import async_session
+
+tables = {
+    'rtpi_price': RtpiPrice,
+    'rtpi_store_id': RtpiStoreId,
+    'rtpi_price_page': RtpiPricePage,
+    'rtpi_product_name': RtpiProductName
+}
+
+date_attributes = [
+    'moment',
+    'date_last_crawl',
+    'date_observe',
+    'date_last_in_stock',
+    'date_add'
+]
+
+#Таймаут для метода получения кол-ва строк в таблице
+get_count_timeout = ClientTimeout(total=int(settings.CLIENT_TIMEOUT_GET_COUNT))
+
+#Таймат для метода получения контента
+get_content_timeout = ClientTimeout(total=int(settings.CLIENT_TIMEOUT_GET_CONTENT))
+
+logger = logging.getLogger(__name__)
+
+class Updater:
+    def __init__(self, table_name: str, limit: str = None) -> None:
+        self.table_name = table_name
+        self.limit = int(limit) if limit \
+            else int(copy.copy(settings.TABLE_LIMIT))
+
+    @staticmethod
+    def request_builder(table_name: str, filter: str = None) -> URL:
+        """Конструктор запроса"""
+        return URL(f'/{table_name}?{filter}') if filter \
+            else URL(f'/{table_name}')
+
+    @staticmethod
+    async def get_table_count(
+        table_name: str,
+        filter: str = None,
+        ) -> int:
+        """
+        Получить кол-во записей из `table_name`
+
+        `table_name` - наименование таблицы
+
+        `filter` - фильтр запроса
+
+        `scheduler` - шедулер
+        """
+        try:
+            url= Updater.request_builder(table_name, filter)
+            global count
+            async with ScraperSession(timeout=get_count_timeout) as client:
+                return await client.get_count(
+                    url= url
+                )
+        except Exception as e:
+            logger.error(f"Ошибка при получении кол-ва из таблицы {e}")
+
+    async def get_content(
+        self,  
+        ranges: List[str],
+        delay: int = 0
+    ) -> None:
+        """Основной метод получения данных с API ресурса"""
+        range = ranges.pop()
+        header = {
+            'Range' : range
+        }
+        try:
+            global content
+            async with ScraperSession(timeout=get_content_timeout) as client:
+                content = await client.get_json(
+                    headers=header,
+                    url=self.url
+                )
+            if content:
+                await self.asyncpg_insert(content)
+                #await self.write_to_base(content)
+                if len(ranges) > 0:
+                    await asyncio.sleep(delay)
+                    scheduler = scheduler_service.get_scheduler()
+                    scheduler.add_job(
+                        self.get_content,
+                        name=f'{self.table_name} {ranges[-1]}',
+                        misfire_grace_time=None,
+                        args=[ranges, 5]
+                    )
+        except Exception as ex:
+            logger.error(f"Произошла ошибка при получении данных для таблицы {self.table_name} \
+                в диапазоне {range}: {ex}")
+
+    def get_stmt(self, content: Any):
+        #model = tables[self.table_name]
+        if 'rtpi_store_id' == self.table_name:
+            stmt = insert(RtpiStoreId).values(content)
+            return stmt.on_conflict_do_update(
+                constraint='rtpistoreid_store_name_key',
+                set_={
+                    "store_name": stmt.excluded.store_name
+                }
+            )
+        if 'rtpi_product_name' == self.table_name:
+            stmt = insert(RtpiProductName).values(content)
+            return stmt.on_conflict_do_update(
+                constraint='web_price_id_moment_unique',
+                set_={
+                    "product_name": stmt.excluded.product_name,
+                    "contributor_id": stmt.excluded.contributor_id
+                }
+            )
+        if 'rtpi_price_page' == self.table_name:
+            stmt = insert(RtpiPricePage).values(content)
+            return stmt.on_conflict_do_update(
+                constraint='web_price_id_unique',
+                set_={
+                    "price_name": stmt.excluded.price_name,
+                    "price_url": stmt.excluded.price_url,
+                    "date_add": stmt.excluded.date_add,
+                    "date_last_in_stock": stmt.excluded.date_last_in_stock,
+                    "rosstat_id": stmt.excluded.rosstat_id,
+                    "contributor_id": stmt.excluded.contributor_id,
+                    "store_id": stmt.excluded.store_id,
+                    "date_last_crawl": stmt.excluded.date_last_crawl,
+                    "city_code": stmt.excluded.city_code
+                }
+            )
+        if 'rtpi_price' == self.table_name:
+            stmt = insert(RtpiPrice).values(content)
+            return stmt.on_conflict_do_update(
+                constraint='web_price_id_date_observe_unique',
+                set_={
+                    "stock_status": stmt.excluded.stock_status,
+                    "current_price": stmt.excluded.current_price,
+                    "crosssed_price": stmt.excluded.crosssed_price,
+                    "contributor_id": stmt.excluded.contributor_id
+                }
+            )
+        # if isinstance(model, RtpiProductName):
+        #     return await session.scalar(
+        #         select(RtpiProductName)
+        #         .where(RtpiProductName.web_price_id == obj.web_price_id,
+        #         RtpiProductName.moment == obj.moment)
+        #     )
+        # if isinstance(model, RtpiPrice):
+        #     return await session.scalar(
+        #         select(RtpiPrice)
+        #         .where(RtpiPrice.web_price_id == obj.web_price_id,
+        #         RtpiPrice.date_observe == obj.date_observe)
+        #     )
+        # if isinstance(model, RtpiPricePage):
+        #     return await session.scalar(
+        #         select(RtpiPricePage)
+        #         .where(RtpiPricePage.web_price_id == obj.web_price_id)
+        #     )
+
+    async def asyncpg_insert(self, content: Any):
+        """Гигачадовый bulk upsert через asyncpg"""
+        values: list[tuple] = []
+        #Ужасная проверка, но сейчас уже 1.59 и меня это порядком заебало
+        if isinstance(content[0], dict):
+            values = [
+                tuple(item.values()) \
+                    for item in content
+            ]
+        else:
+            values = content
+        conn: asyncpg.connection.Connection \
+            = await asyncpg.connect(dsn=settings.SQLALCHEMY_DATABASE_URI)
+        try:
+            stmt = Updater.make_sql(self.table_name)
+            await conn.executemany(
+                stmt,
+                values
+            )
+        except Exception as ex:
+            logger.error(f"Ошибка при комите: {ex}")
+        finally:
+            await conn.close()
+
+    @staticmethod
+    def make_sql(table_name: str):
+        if table_name == "rtpi_store_id":
+            sql = '''INSERT INTO rtpistoreid (store_id, store_name) \
+            VALUES ($1,$2) \
+            ON CONFLICT \
+            DO NOTHING; '''
+            return sql
+        if table_name == "rtpi_price_page":
+            sql = '''INSERT INTO rtpipricepage (web_price_id, price_name, price_url, date_add, date_last_crawl, date_last_in_stock, rosstat_id, contributor_id, store_id, city_code) \
+            VALUES ($1,$2,$3,to_timestamp($4, 'YYYY-MM-DD T HH24:MI:SS:MS'),to_timestamp($5, 'YYYY-MM-DD T HH24:MI:SS:MS'),to_timestamp($6, 'YYYY-MM-DD T HH24:MI:SS:MS'),$7,$8,$9,$10) \
+            ON CONFLICT ON CONSTRAINT web_price_id_unique\
+            DO UPDATE \
+            SET (price_name, price_url, date_add, date_last_crawl, date_last_in_stock, rosstat_id, contributor_id, store_id, city_code) \
+            = (excluded.price_name, excluded.price_url, excluded.date_add, excluded.date_last_crawl, excluded.date_last_in_stock, excluded.rosstat_id, excluded.contributor_id, excluded.store_id, excluded.city_code); '''
+            return sql
+        if table_name == "rtpi_product_name":
+            sql = '''INSERT INTO rtpiproductname (web_price_id, product_name, contributor_id, moment) \
+            VALUES ($1,$2,$3,to_timestamp($4, 'YYYY-MM-DD T HH24:MI:SS:MS')) \
+            ON CONFLICT \
+            DO NOTHING;'''
+            return sql   
+        if table_name == "rtpi_price":
+            sql = '''INSERT INTO rtpiprice (web_price_id, date_observe, stock_status, current_price, crosssed_price, contributor_id) \
+            VALUES ($1,to_timestamp($2, 'YYYY-MM-DD T HH24:MI:SS:MS'),$3,$4,$5,$6) \
+            ON CONFLICT ON CONSTRAINT web_price_id_date_observe_unique \
+            DO UPDATE \
+            SET (stock_status, current_price, crosssed_price, contributor_id) \
+            = (excluded.stock_status, excluded.current_price, excluded.crosssed_price, excluded.contributor_id);'''
+            return sql
+
+    async def write_to_base(self, content: Any):
+        """Основной метод записи полученных данных"""
+        new_objects = [
+            self.fit_to_model(json_object)
+                for  json_object in content
+        ]
+        async with async_session() as session:
+            # for json_object in content:
+            #     new_obj = self.fit_to_model(json_object)
+            #     db_obj = await Updater.get_exist_object(session, new_obj)
+            #     if db_obj:
+            #         Updater.update_data(obj=db_obj, new_obj=new_obj)
+            #     else:
+            #         new_objects.append(new_obj)
+            #     if new_objects:
+            #         session.add_all(new_objects)
+            session.add_all(new_objects)
+            try:
+                await session.commit()
+            except Exception as ex:
+                logger.error(f"Ошибка при комите: {ex}")
+                await session.rollback()
+        
+    def fit_to_model(self, json_object: str):
+        """Перевести json в модель"""
+        model = tables[self.table_name]
+        #datetime.datetime.fromisoformat
+        obj = model(**json_object)
+        for atr in date_attributes:
+            if hasattr(obj, atr):
+                obj_atr = getattr(obj, atr)
+                if isinstance(obj_atr, str):
+                    setattr(obj, atr, parser.parse(obj_atr))
+        return obj
+
+
+    @staticmethod
+    async def get_exist_object(session: AsyncSession, obj: Any):
+        """Получить существующий объект или None"""
+        if isinstance(obj, RtpiStoreId):
+            return await session.scalar(
+                select(RtpiStoreId)
+                .where(RtpiStoreId.store_name == obj.store_name)
+            )
+        if isinstance(obj, RtpiProductName):
+            return await session.scalar(
+                select(RtpiProductName)
+                .where(RtpiProductName.web_price_id == obj.web_price_id,
+                RtpiProductName.moment == obj.moment)
+            )
+        if isinstance(obj, RtpiPrice):
+            return await session.scalar(
+                select(RtpiPrice)
+                .where(RtpiPrice.web_price_id == obj.web_price_id,
+                RtpiPrice.date_observe == obj.date_observe)
+            )
+        if isinstance(obj, RtpiPricePage):
+            return await session.scalar(
+                select(RtpiPricePage)
+                .where(RtpiPricePage.web_price_id == obj.web_price_id)
+            )
+
+    @staticmethod
+    def update_data(obj: Any, new_obj: Any):
+        """Перенос изменений из старого объекта в новый"""
+        new_obj_dict = vars(new_obj)
+        update_data = {x: new_obj_dict[x] \
+        for x in new_obj_dict if x != 'id' \
+        and x != '_sa_instance_state'}
+        for key, value in update_data.items():
+            setattr(obj, key, value)
+
+    def count_iterat_count(self, table_count: int) -> 'tuple[int, int]':
+        """Расчет итераций, для дальнейшего распределения"""
+        iterat_count = table_count // self.limit
+        while iterat_count == 0:
+            self.limit -= 100
+            if self.limit == 0:
+                iterat_count = table_count
+                break
+            else:
+                iterat_count = table_count // self.limit
+
+        addit_count = table_count - self.limit * iterat_count
+
+        return iterat_count, addit_count
+
+    def produce_jobs(self, table_count: int):
+        """Создание задач"""
+        scheduler = scheduler_service.get_scheduler()
+        max = int(settings.MAX_INSTANCES)
+        range_list = JobHelper.make_range_list(table_count, max)
+        for ranges in range_list:
+            if len(ranges) > 0:
+                scheduler.add_job(
+                    self.get_content,
+                    name=f'{self.table_name} {ranges[0]}',
+                    misfire_grace_time=None,
+                    args=[ranges, 0]
+                )
+        # prev_i = 0
+        # if self.limit == 0:
+        #     scheduler.add_job(
+        #         self.get_content,
+        #         id=id, 
+        #         name=f'{self.table_name} 0-{iterat_count}',
+        #         misfire_grace_time=None, 
+        #         args=[f'0-{iterat_count}']
+        #     )
+        #     #.put_nowait(f"0-{iterat_count}")
+        # else:
+        #     for i in range(iterat_count):
+        #         if i + 1 == iterat_count:
+        #             scheduler.add_job(
+        #                 self.get_content, 
+        #                 name=f'{self.table_name} {prev_i}-{(i+1)*self.limit - 1}',
+        #                 misfire_grace_time=None,
+        #                 args=[f'{prev_i}-{(i+1)*self.limit - 1}']
+        #             )
+        #             #queue.put_nowait(f"{prev_i}-{(i+1)*limit - 1}")
+        #             prev_i = (i+1)*self.limit
+        #             scheduler.add_job(
+        #                 self.get_content, 
+        #                 name=f'{self.table_name} {prev_i}-{prev_i+addit_count}',
+        #                 misfire_grace_time=None,
+        #                 args=[f'{prev_i}-{prev_i+addit_count}']
+        #             )
+        #             #queue.put_nowait(f"{prev_i}-{prev_i+addit_count}")
+        #         else:
+        #             scheduler.add_job(
+        #                 self.get_content, 
+        #                 name=f'{self.table_name} {prev_i}-{(i+1)*self.limit - 1}',
+        #                 misfire_grace_time=None,
+        #                 args=[f'{prev_i}-{(i+1)*self.limit - 1}'])
+        #             #queue.put_nowait(f"{prev_i}-{(i+1)*limit - 1}")
+        #             prev_i = (i+1)*self.limit
+
+async def update_table(table_name: str):
+    try:
+        updater = Updater(table_name)
+        count = await updater.get_table_count(table_name)
+        assert count != None
+        updater.url = Updater.request_builder(table_name)
+        #iterat_count, adidit_count = updater.count_iterat_count(count)
+        updater.produce_jobs(count)
+    except AssertionError as ex:
+        logger.error(f"При обновлении таблицы {table_name} не удалось получить кол-во строк")
+    except Exception as ex:
+        logger.error(f"При обновлении таблицы {table_name} произошла ошибка {ex}")
+
+async def test_coroutine_job(
+    args_list: list = None,
+    delay: int = 0,
+):
+    start_time = datetime.datetime.now()
+    wait_time = random.randint(0, 100)
+    await asyncio.sleep(wait_time)
+    end_time = datetime.datetime.now()
+    print(f"Прождали {end_time-start_time} сек, начали {start_time}, закончили {end_time}")
+    if len(args_list) > 0:
+        await asyncio.sleep(delay)
+        args_list.pop()
+        scheduler = scheduler_service.get_scheduler()
+        scheduler.add_job(
+            test_coroutine_job,
+            misfire_grace_time=None,
+            args=[args_list, delay]
+        )
+
+

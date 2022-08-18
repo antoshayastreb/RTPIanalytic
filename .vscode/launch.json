@@ -9,10 +9,11 @@
             "type": "python",
             "request": "launch",
             "module": "uvicorn",
+            "cwd" :"${workspaceFolder}/src/backend/app/scraper",
             "args": [
-                "scraper.main:app"
+                "main:app",
+                "--reload",
             ],
-            "justMyCode": true,
             "env": {
                 "PYTHONPATH": "${workspaceFolder}/src/backend/app"
             }

@@ -2,7 +2,7 @@ from sqlalchemy import (
     Column,
     Integer,
     Text,
-    TIMESTAMP,
+    DateTime,
     UniqueConstraint,
     BigInteger
 )
@@ -14,7 +14,7 @@ class RtpiProductName(Base):
     web_price_id = Column(BigInteger, index=True)
     product_name = Column(Text)
     contributor_id = Column(Integer)
-    moment = Column(TIMESTAMP)
+    moment = Column(DateTime)
 
     # __ts_vector__ = Column(TSVector(),
     #                           Computed("to_tsvector('russian', product_name || '')",

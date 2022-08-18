@@ -7,7 +7,7 @@ from apscheduler.schedulers.base import (
     STATE_RUNNING
 )
 
-from scraper.utils.services.scheduler_service.scheduler import get_scheduler
+from scraper.utils.services.scheduler_service import scheduler_service
 from scraper.utils.exeption_handlers.scheduler import (
     SchedulerAlreadyPausedException,
     SchedulerAlreadyRunningException,
@@ -18,7 +18,9 @@ router = APIRouter()
 
 
 @router.post("/pause", status_code=200)
-async def pause_scheduler(scheduler: AsyncIOScheduler = Depends(get_scheduler)):
+async def pause_scheduler(scheduler: AsyncIOScheduler = 
+    Depends(scheduler_service.get_scheduler)
+    ):
     """Приостановка шедулера"""
     if scheduler.state == STATE_STOPPED:
         raise SchedulerStopedException()
@@ -34,7 +36,9 @@ async def pause_scheduler(scheduler: AsyncIOScheduler = Depends(get_scheduler)):
         detail=f"Не удалось приостановить шедулер {e}")
 
 @router.post("/resume", status_code=200)
-async def resume_scheduler(scheduler: AsyncIOScheduler = Depends(get_scheduler)):
+async def resume_scheduler(scheduler: AsyncIOScheduler = 
+    Depends(scheduler_service.get_scheduler)
+    ):
     """Возобновление работы шедулера"""
     if scheduler.state == STATE_STOPPED:
         raise SchedulerStopedException()
