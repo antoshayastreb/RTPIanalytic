@@ -1,10 +1,10 @@
 import logging
 from fastapi import FastAPI
 
-from .config import settings
-from .utils.services.scheduler_service.scheduler import SchedulerService
-from .api.api_v1.api import api_router
-from .utils.exeption_handlers.scheduler import register_scheduler_exceptions_handlers
+from config import settings
+from scraper.utils.services.scheduler_service import scheduler_service
+from api.api_v1.api import api_router
+from utils.exeption_handlers.scheduler import register_scheduler_exceptions_handlers
 
 #Инициализация приложения
 app = FastAPI(
@@ -15,7 +15,7 @@ app = FastAPI(
 )
 
 #Настройки логирования
-logging.basicConfig(level = logging.INFO)
+logging.basicConfig(filename="scraperLog.log", level = logging.INFO)
 logger = logging.getLogger( __name__ )
 
 #Регистрация эндпоинтов
@@ -28,20 +28,20 @@ register_scheduler_exceptions_handlers(app)
 @app.on_event("startup")
 async def try_to_load_scheduler():
     """Создает шедулер"""
-    scheduler = SchedulerService().get_scheduler()
-    app.state.scheduler_service = scheduler
+    scheduler = scheduler_service.get_scheduler()
+    #app.state.scheduler_service = scheduler
     try:
         scheduler.start()
         logger.info(" Шедулер запущен ")
-    except:
-        logger.error("")
+    except Exception as ex:
+        logger.error(f"Произошла ошибка при запуске шедулера {str(ex)}")
 
 #Вызов функций на завершении сервиса
 @app.on_event("shutdown")
 async def try_to_shutdown_scheduler():
     """Завершает шедулер"""
     try:
-        scheduler = app.state.scheduler_service
+        scheduler = scheduler_service.get_scheduler()
         scheduler.shutdown(wait=False)
     except:
         pass

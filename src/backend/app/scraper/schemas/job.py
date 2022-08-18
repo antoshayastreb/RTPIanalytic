@@ -11,10 +11,10 @@ class CurrentScheduledJob(JobBase):
     run_frequency: str
     next_run: str
 
-class CurrentScheduledJobsResponse(BaseModel):
+class CurrentScheduledJobsResponse(JobBase):
     """Список запланированных задач"""
     jobs:List[CurrentScheduledJob]
 
-class JobCreateDeleteResponse(BaseModel):
+class JobCreateDeleteResponse(JobBase):
     """Класс для создания/удаления задачи"""
     scheduled: bool

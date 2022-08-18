@@ -4,7 +4,8 @@ from sqlalchemy import engine_from_config
 from sqlalchemy import pool
 
 # declarative base
-from models.rtpi_price import Base
+from db.base_class import Base
+import models
 
 from alembic import context
 
@@ -32,6 +33,18 @@ target_metadata = Base.metadata
 # my_important_option = config.get_main_option("my_important_option")
 # ... etc.
 
+def get_list_from_config(config, key):
+    arr = config.get_main_option(key, [])
+    if arr:
+        # split on newlines and commas, then trim (I mean strip)
+        arr = [token for a in arr.split('\n') for b in a.split(',') if (token := b.strip())]
+    return arr
+
+exclude_tables = get_list_from_config(config, "exclude_tables")
+
+def include_object(object, name, type_, *args, **kwargs):
+        return not (type_ == 'table' and name in exclude_tables)
+
 def get_url():
     user = os.getenv("POSTGRES_USER", "postgres")
     password = os.getenv("POSTGRES_PASSWORD", "")
@@ -57,7 +70,8 @@ def run_migrations_offline() -> None:
         url=url,
         target_metadata=target_metadata,
         literal_binds=True,
-        compare_type=True
+        compare_type=True,
+        include_object=include_object
     )
 
     with context.begin_transaction():
@@ -82,7 +96,7 @@ def run_migrations_online() -> None:
     with connectable.connect() as connection:
         context.configure(
             connection=connection, target_metadata=target_metadata,
-            compare_type=True
+            compare_type=True, include_object=include_object
         )
 
         with context.begin_transaction():

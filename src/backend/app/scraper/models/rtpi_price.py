@@ -3,7 +3,7 @@ from sqlalchemy import (
     Integer,
     BigInteger,
     Text,
-    TIMESTAMP,
+    DateTime,
     UniqueConstraint
 )
 
@@ -12,7 +12,7 @@ from db.base_class import Base
 class RtpiPrice(Base):
     id = Column(Integer, primary_key=True, index=True)
     web_price_id = Column(BigInteger, index=True)
-    date_observe = Column(TIMESTAMP)
+    date_observe = Column(DateTime)
     stock_status = Column(Text, index=True)
     current_price = Column(BigInteger)
     crosssed_price = Column(BigInteger)
