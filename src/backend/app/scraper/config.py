@@ -76,7 +76,7 @@ class Settings(BaseSettings):
     CLIENT_TIMEOUT_GET_CONTENT: str = '180'
     CLIENT_RETRY_ATTEMPTS: str = '3'
     #Настройки для APScheduler
-    MAX_INSTANCES: str = '2'
+    MAX_INSTANCES: str = '4'
     COALESCE: str = 'True'
     MAX_WORKERS: str = '4'
     TABLE_LIMIT: str = '100000'

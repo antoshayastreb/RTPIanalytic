@@ -12,8 +12,8 @@ from scraper.utils.exeption_handlers.scheduler import (
     JobNotFoundException
 )
 from scraper.utils.services.scheduler_service.scraper_methods import (
-    update_table,
-    test_coroutine_job
+    update_wraper,
+    test_job_wrapper
 )
 
 from scraper.config import settings
@@ -63,7 +63,7 @@ async def update_table_job(
     """Обновить указанную таблицу"""
     try:
         scheduler.add_job(
-            update_table, 
+            update_wraper, 
             name=f"Обновление {table}", 
             args=[table]
         )
@@ -77,14 +77,14 @@ async def test_for_coroutine(
     scheduler: AsyncIOScheduler = Depends(scheduler_service.get_scheduler)
 ):
     try:
-        max = int(settings.MAX_INSTANCES)
+        max = 10
         main_args_list = [
             i for i in range (0, 100)
         ]
         splited_list = JobHelper.split_list(main_args_list, max)
         for inner_list in splited_list:
             scheduler.add_job(
-                test_coroutine_job,
+                test_job_wrapper,
                 #max_instances=2,
                 misfire_grace_time=None,
                 args=[inner_list, 3]

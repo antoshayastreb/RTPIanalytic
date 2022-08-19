@@ -108,7 +108,7 @@ class Updater:
                     await asyncio.sleep(delay)
                     scheduler = scheduler_service.get_scheduler()
                     scheduler.add_job(
-                        self.get_content,
+                        self.get_content_wraper,
                         name=f'{self.table_name} {ranges[-1]}',
                         misfire_grace_time=None,
                         args=[ranges, 5]
@@ -303,11 +303,13 @@ class Updater:
         for ranges in range_list:
             if len(ranges) > 0:
                 scheduler.add_job(
-                    self.get_content,
+                    self.get_content_wraper,
                     name=f'{self.table_name} {ranges[0]}',
                     misfire_grace_time=None,
                     args=[ranges, 0]
                 )
+    def get_content_wraper(self, *args):
+        asyncio.run(self.get_content(*args))
 
 async def update_table(table_name: str):
     try:
@@ -336,9 +338,20 @@ async def test_coroutine_job(
         args_list.pop()
         scheduler = scheduler_service.get_scheduler()
         scheduler.add_job(
-            test_coroutine_job,
+            test_job_wrapper,
             misfire_grace_time=None,
             args=[args_list, delay]
         )
 
+def update_wraper(*args):
+    asyncio.run(update_table(args))
+
+
+def test_job_wrapper(args_list: list = None, delay: int = 0):
+    #loop = asyncio.new_event_loop()
+    asyncio.run(test_coroutine_job(args_list, delay))
+    # asyncio.set_event_loop(loop)
+    # asyncio.ensure_future()
+    # asyncio.get_event_loop() \
+    # .run_in_executor(None, test_coroutine_job, args_list, delay)
 

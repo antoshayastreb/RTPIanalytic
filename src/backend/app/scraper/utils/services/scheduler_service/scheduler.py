@@ -1,7 +1,8 @@
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.executors.pool import ThreadPoolExecutor, ProcessPoolExecutor
-from apscheduler.executors.asyncio import AsyncIOExecutor
 from apscheduler.jobstores.sqlalchemy import SQLAlchemyJobStore
+from apscheduler.schedulers.background import BackgroundScheduler
+from apscheduler.schedulers.base import BaseScheduler
 from fastapi import Request
 from random import randint
 
@@ -11,10 +12,10 @@ jobstores = {
     'default': SQLAlchemyJobStore(url=settings.SQLALCHEMY_DATABASE_URI)
 }
 
-executors={
-    "default": AsyncIOExecutor(), 
-    "cron": ThreadPoolExecutor()
-},
+executors = {
+    'default': ThreadPoolExecutor(20),
+    'processpool': ProcessPoolExecutor(5)
+}
 
 job_defaults = {
     'coalesce': settings.COALESCE.lower() == 'true',
@@ -25,9 +26,10 @@ job_defaults = {
 class SchedulerService(object):
     def __init__(self) -> None:
         self.number = randint(0, 10)
-        self.scheduler = AsyncIOScheduler(
-            jobstores=jobstores,
-            job_defaults=job_defaults, 
+        self.scheduler: BaseScheduler = BackgroundScheduler(
+            # jobstores=jobstores,
+            executors=executors,
+            # job_defaults=job_defaults, 
             timezone='Europe/Moscow'
         )
         # self.scheduler.configure(
@@ -55,7 +57,7 @@ class SchedulerService(object):
     def __str__(self) -> str:
         return "APSchedulerService"
     
-    def get_scheduler(self) -> AsyncIOScheduler:
+    def get_scheduler(self) -> BaseScheduler:
         return self.scheduler
 
 scheduler_service = SchedulerService()
