@@ -11,6 +11,7 @@ from sqlalchemy import select
 import random
 from sqlalchemy.dialects.postgresql import insert
 import asyncpg
+from threading import current_thread
 
 from ...help_func import JobHelper
 from scraper.config import settings
@@ -75,6 +76,7 @@ class Updater:
         `scheduler` - шедулер
         """
         try:
+            print(f'Обновление {table_name} {current_thread().getName()}')
             url= Updater.request_builder(table_name, filter)
             global count
             async with ScraperSession(timeout=get_count_timeout) as client:
@@ -91,6 +93,7 @@ class Updater:
     ) -> None:
         """Основной метод получения данных с API ресурса"""
         range = ranges.pop()
+        print(f'{range} для {self.table_name} {current_thread().getName()}')
         header = {
             'Range' : range
         }
@@ -298,7 +301,7 @@ class Updater:
     def produce_jobs(self, table_count: int):
         """Создание задач"""
         scheduler = scheduler_service.get_scheduler()
-        max = int(settings.MAX_INSTANCES)
+        max = int(settings.MAX_CONCURENT_JOBS)
         range_list = JobHelper.make_range_list(table_count, max)
         for ranges in range_list:
             if len(ranges) > 0:
@@ -344,7 +347,7 @@ async def test_coroutine_job(
         )
 
 def update_wraper(*args):
-    asyncio.run(update_table(args))
+    asyncio.run(update_table(*args))
 
 
 def test_job_wrapper(args_list: list = None, delay: int = 0):

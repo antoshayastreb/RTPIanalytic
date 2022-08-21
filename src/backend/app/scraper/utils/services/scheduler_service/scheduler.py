@@ -19,7 +19,7 @@ executors = {
 
 job_defaults = {
     'coalesce': settings.COALESCE.lower() == 'true',
-    'max_instances': int(settings.MAX_INSTANCES)
+    #'max_instances': int(settings.MAX_CONCURENT_JOBS)
 }
 
 
@@ -27,7 +27,7 @@ class SchedulerService(object):
     def __init__(self) -> None:
         self.number = randint(0, 10)
         self.scheduler: BaseScheduler = BackgroundScheduler(
-            # jobstores=jobstores,
+            jobstores=jobstores,
             executors=executors,
             # job_defaults=job_defaults, 
             timezone='Europe/Moscow'

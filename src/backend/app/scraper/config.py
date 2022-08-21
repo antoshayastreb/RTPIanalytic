@@ -76,9 +76,12 @@ class Settings(BaseSettings):
     CLIENT_TIMEOUT_GET_CONTENT: str = '180'
     CLIENT_RETRY_ATTEMPTS: str = '3'
     #Настройки для APScheduler
-    MAX_INSTANCES: str = '4'
+    #MAX_INSTANCES: str = '4'
+    #Настройка регулирующая сколько одновремно задач будет
+    #запущено
+    MAX_CONCURENT_JOBS: str = '2'
     COALESCE: str = 'True'
-    MAX_WORKERS: str = '4'
+    #MAX_WORKERS: str = '4'
     TABLE_LIMIT: str = '100000'
     #Настройки для Pydantic BaseSettings
     class Config:
