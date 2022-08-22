@@ -1,3 +1,4 @@
+import uuid
 from apscheduler.executors.pool import ThreadPoolExecutor
 from fastapi import APIRouter, Depends, HTTPException, status
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
@@ -77,18 +78,24 @@ async def test_for_coroutine(
     scheduler: AsyncIOScheduler = Depends(scheduler_service.get_scheduler)
 ):
     try:
-        max = 10
+        max = int(settings.MAX_CONCURENT_JOBS)
         main_args_list = [
             i for i in range (0, 100)
         ]
         splited_list = JobHelper.split_list(main_args_list, max)
         for inner_list in splited_list:
-            scheduler.add_job(
+            id = str(uuid.uuid4())
+            job = scheduler.add_job(
                 test_job_wrapper,
+                id=id,
                 #max_instances=2,
                 misfire_grace_time=None,
-                args=[inner_list, 3]
+                args=[inner_list, 3],
+                kwargs={'parent_id':id}
             )
+            # await JobHelper.store_job(
+            #     jobs=[job]
+            # )
     except Exception as ex:
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
         detail=f"Возникла ошибка: {str(ex)}")

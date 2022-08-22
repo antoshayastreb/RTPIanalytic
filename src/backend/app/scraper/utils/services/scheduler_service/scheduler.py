@@ -1,12 +1,20 @@
+import asyncio
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.executors.pool import ThreadPoolExecutor, ProcessPoolExecutor
 from apscheduler.jobstores.sqlalchemy import SQLAlchemyJobStore
 from apscheduler.schedulers.background import BackgroundScheduler
 from apscheduler.schedulers.base import BaseScheduler
+from apscheduler.events import JobEvent
+from apscheduler.events import (
+    EVENT_JOB_EXECUTED,
+    EVENT_JOB_ERROR,
+    EVENT_JOB_ADDED
+)
 from fastapi import Request
 from random import randint
 
 from scraper.config import settings
+from scraper.utils.help_func import JobHelper
 
 jobstores = {
     'default': SQLAlchemyJobStore(url=settings.SQLALCHEMY_DATABASE_URI)
@@ -22,6 +30,14 @@ job_defaults = {
     #'max_instances': int(settings.MAX_CONCURENT_JOBS)
 }
 
+def on_job_completed(event: JobEvent):
+    JobHelper.update_job(event.job_id)
+
+def on_job_added(event: JobEvent):
+    scheduler = scheduler_service.get_scheduler()
+    job = scheduler.get_job(event.job_id)
+    JobHelper.create_job([job])
+
 
 class SchedulerService(object):
     def __init__(self) -> None:
@@ -32,6 +48,8 @@ class SchedulerService(object):
             # job_defaults=job_defaults, 
             timezone='Europe/Moscow'
         )
+        self.scheduler.add_listener(on_job_completed, EVENT_JOB_EXECUTED | EVENT_JOB_ERROR)
+        self.scheduler.add_listener(on_job_added, EVENT_JOB_ADDED)
         # self.scheduler.configure(
         #     #Конфиг APSchedler
         #     #https://apscheduler.readthedocs.io/en/stable/userguide.html

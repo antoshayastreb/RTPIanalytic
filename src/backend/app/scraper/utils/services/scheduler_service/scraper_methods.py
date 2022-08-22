@@ -332,7 +332,7 @@ async def test_coroutine_job(
 ):
     """Тестовый метод, без обращений к апи и к базе"""
     start_time = datetime.datetime.now()
-    wait_time = random.randint(0, 100)
+    wait_time = random.randint(0, 10)
     await asyncio.sleep(wait_time)
     end_time = datetime.datetime.now()
     print(f"Прождали {end_time-start_time} сек, начали {start_time}, закончили {end_time}")
@@ -340,7 +340,7 @@ async def test_coroutine_job(
         await asyncio.sleep(delay)
         args_list.pop()
         scheduler = scheduler_service.get_scheduler()
-        scheduler.add_job(
+        job = scheduler.add_job(
             test_job_wrapper,
             misfire_grace_time=None,
             args=[args_list, delay]
@@ -349,12 +349,10 @@ async def test_coroutine_job(
 def update_wraper(*args):
     asyncio.run(update_table(*args))
 
-
-def test_job_wrapper(args_list: list = None, delay: int = 0):
-    #loop = asyncio.new_event_loop()
-    asyncio.run(test_coroutine_job(args_list, delay))
-    # asyncio.set_event_loop(loop)
-    # asyncio.ensure_future()
-    # asyncio.get_event_loop() \
-    # .run_in_executor(None, test_coroutine_job, args_list, delay)
+def test_job_wrapper(
+        args_list: list = None, 
+        delay: int = 0, 
+        parent_id: str = None
+    ):
+        asyncio.run(test_coroutine_job(args_list, delay))
 
