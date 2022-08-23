@@ -1,7 +1,8 @@
 import uuid
 from apscheduler.executors.pool import ThreadPoolExecutor
 from fastapi import APIRouter, Depends, HTTPException, status
-from apscheduler.schedulers.asyncio import AsyncIOScheduler
+from apscheduler.schedulers.base import BaseScheduler
+from apscheduler.job import Job as APSJob
 from typing import List
 
 from scraper.utils.services.scheduler_service import scheduler_service
@@ -16,6 +17,7 @@ from scraper.utils.exeption_handlers.scheduler import (
 )
 from scraper.utils.services.scheduler_service.scraper_methods import (
     update_wraper,
+    update_all_wraper,
     test_job_main
 )
 
@@ -26,7 +28,7 @@ router = APIRouter()
 
 @router.get("/all_scheduled", response_model=CurrentScheduledJobsResponse)
 async def get_all_scheduled_jobs(
-    scheduler: AsyncIOScheduler = Depends(scheduler_service.get_scheduler)
+    scheduler: BaseScheduler = Depends(scheduler_service.get_scheduler)
 ):
     """Получить все запланированые задачи"""
     try:
@@ -47,7 +49,7 @@ async def get_all_scheduled_jobs(
 @router.delete("/delete/{job_id}", response_model=JobCreateDeleteResponse)
 async def delete_job(
     job_id: str,
-    scheduler: AsyncIOScheduler = Depends(scheduler_service.get_scheduler)
+    scheduler: BaseScheduler = Depends(scheduler_service.get_scheduler)
 ):
     """Удалить задачу"""
     if not scheduler.get_job(job_id):
@@ -58,26 +60,55 @@ async def delete_job(
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
         detail=f"При удалени задачи возникла ошибка {str(ex)}")
 
-@router.get("/update/{table}")
+@router.get("/update_all", response_model=JobOut)
+async def update_all_tables(
+    fetch_all: bool = False,
+    scheduler: BaseScheduler = Depends(scheduler_service.get_scheduler)
+):
+    """Обновить все таблицы вручную"""
+    try:
+        id = str(uuid.uuid4())
+        job: APSJob = scheduler.add_job(
+            update_all_wraper,
+            id = id,
+            name = 'Oбновление всех таблиц' + 
+            'полное' if fetch_all else 'с последней даты',
+            args=[fetch_all, id]
+        )
+        return JobOut(
+            job_id=job.id,
+            name=job.name
+        )
+    except Exception as ex:
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+        detail=f"Возникла ошибка: {str(ex)}")
+    
+
+@router.get("/update/{table}", response_model=JobOut)
 async def update_table_job(
     table: str,
-    scheduler: AsyncIOScheduler = Depends(scheduler_service.get_scheduler)
+    scheduler: BaseScheduler = Depends(scheduler_service.get_scheduler)
 ):
     """Обновить указанную таблицу"""
     try:
-        scheduler.add_job(
-            update_wraper, 
+        id = str(uuid.uuid4())
+        job: APSJob = scheduler.add_job(
+            update_wraper,
+            id=id, 
             name=f"Обновление {table}", 
-            args=[table]
+            args=[table, id]
         )
-        #await get_table_count(table)
+        return JobOut(
+            job_id=job.id,
+            name=job.name
+        )
     except Exception as ex:
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
         detail=f"Возникла ошибка: {str(ex)}")
 
 @router.get("/test_coroutine", response_model=JobOut)
 async def test_for_coroutine(
-    scheduler: AsyncIOScheduler = Depends(scheduler_service.get_scheduler)
+    scheduler: BaseScheduler = Depends(scheduler_service.get_scheduler)
 ):
     try:
         id = str(uuid.uuid4())
@@ -91,16 +122,6 @@ async def test_for_coroutine(
             job_id=job.id,
             name=job.name
         )
-        # for inner_list in splited_list:
-
-        #     job = scheduler.add_job(
-        #         test_job_wrapper,
-        #         id=id,
-        #         #max_instances=2,
-        #         misfire_grace_time=None,
-        #         args=[inner_list, 3],
-        #         kwargs={'parent_id':id}
-        #     )
     except Exception as ex:
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
         detail=f"Возникла ошибка: {str(ex)}")

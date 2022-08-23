@@ -19,12 +19,12 @@ from ...help_func import JobHelper
 from scraper.config import settings
 from scraper.utils.services.scheduler_service import scheduler_service
 from .session import ScraperSession
-from scraper.db.base_class import Base
 from scraper.models import (
     RtpiPrice,
     RtpiStoreId,
     RtpiPricePage,
-    RtpiProductName
+    RtpiProductName,
+    Job as PersistanceJob
 )
 from scraper.db.session import async_session, sync_session
 
@@ -78,7 +78,7 @@ class Updater:
         `scheduler` - шедулер
         """
         try:
-            print(f'Обновление {table_name} {current_thread().getName()}')
+            #print(f'Обновление {table_name} {current_thread().getName()}')
             url= Updater.request_builder(table_name, filter)
             global count
             async with ScraperSession(timeout=get_count_timeout) as client:
@@ -91,11 +91,12 @@ class Updater:
     async def get_content(
         self,  
         ranges: List[str],
+        parent_id: str,
         delay: int = 0
     ) -> None:
         """Основной метод получения данных с API ресурса"""
         range = ranges.pop()
-        print(f'{range} для {self.table_name} {current_thread().getName()}')
+        #print(f'{range} для {self.table_name} {current_thread().getName()}')
         header = {
             'Range' : range
         }
@@ -111,12 +112,15 @@ class Updater:
                 #await self.write_to_base(content)
                 if len(ranges) > 0:
                     await asyncio.sleep(delay)
+                    session = sync_session()
                     scheduler = scheduler_service.get_scheduler()
+                    id = JobHelper.get_prepared_job(parent_id, session, scheduler)
                     scheduler.add_job(
                         self.get_content_wraper,
+                        id = id,
                         name=f'{self.table_name} {ranges[-1]}',
                         misfire_grace_time=None,
-                        args=[ranges, 5]
+                        args=[ranges, 5, parent_id]
                     )
         except Exception as ex:
             logger.error(f"Произошла ошибка при получении данных для таблицы {self.table_name} \
@@ -300,33 +304,83 @@ class Updater:
 
         return iterat_count, addit_count
 
-    def produce_jobs(self, table_count: int):
+    def produce_jobs(self, table_count: int, parent_id: str):
         """Создание задач"""
-        scheduler = scheduler_service.get_scheduler()
-        max = int(settings.MAX_CONCURENT_JOBS)
-        range_list = JobHelper.make_range_list(table_count, max)
-        for ranges in range_list:
-            if len(ranges) > 0:
-                scheduler.add_job(
-                    self.get_content_wraper,
-                    name=f'{self.table_name} {ranges[0]}',
-                    misfire_grace_time=None,
-                    args=[ranges, 0]
-                )
+        try:
+            session = None
+            scheduler = scheduler_service.get_scheduler()
+            max = int(settings.MAX_CONCURENT_JOBS)
+            range_list = JobHelper.make_range_list(table_count, max)
+            jobs_amount = sum(len(x) for x in range_list)
+            JobHelper.create_child_jobs(parent_id, jobs_amount)
+            session = sync_session()
+            db_parent_job = JobHelper.get_job_by_id(parent_id, session)
+            if not db_parent_job:
+                raise ValueError('В базе отсутсвует основная задача, ' + 
+                'невозможно получить дочерние')
+            for idx, ranges in enumerate(range_list):
+                if len(ranges) > 0:
+                    child_job_id = db_parent_job.child_jobs[idx].id
+                    scheduler.add_job(
+                        self.get_content_wraper,
+                        id=child_job_id,
+                        name=f'{self.table_name} {ranges[0]}',
+                        misfire_grace_time=None,
+                        args=[ranges, parent_id, 0]
+                    )
+        except Exception as ex:
+            raise ex
+        finally: 
+            if session:
+                session.close()
+
     def get_content_wraper(self, *args):
         asyncio.run(self.get_content(*args))
 
-async def update_table(table_name: str):
-    try:
+async def update_table(
+    table_name: str,
+    self_id: str
+):
+    """Обновить указанную таблицу"""
+    try:        
         updater = Updater(table_name)
         count = await updater.get_table_count(table_name)
         assert count != None
         updater.url = Updater.request_builder(table_name)
-        updater.produce_jobs(count)
+        updater.produce_jobs(count, self_id)
     except AssertionError as ex:
         logger.error(f"При обновлении таблицы {table_name} не удалось получить кол-во строк")
     except Exception as ex:
         logger.error(f"При обновлении таблицы {table_name} произошла ошибка {ex}")
+
+async def update_all(
+    fetch_all: bool,
+    parent_id: str
+):
+    """Обновление всех таблиц"""
+    try:
+        scheduler = scheduler_service.get_scheduler()
+        await JobHelper.create_child_jobs_async(parent_id, len(tables))
+        session = sync_session()
+        db_parent_job = JobHelper.get_job_by_id(parent_id, session)
+        if not db_parent_job:
+                raise ValueError('В базе отсутсвует основная задача, ' + 
+                'невозможно получить дочерние')
+        for idx, table in enumerate(tables):
+            child_job_id = db_parent_job.child_jobs[idx].id
+            scheduler.add_job(
+                update_wraper,
+                id=child_job_id,
+                name=f'Обновление {table}',
+                misfire_grace_time=None,
+                args=[table, child_job_id]
+            )
+    except Exception as ex:
+        logger.error('При обновлении всех таблиц ' +
+        f'произошла ошибка {ex}')
+    finally:
+        session.close()
+
 
 async def test_coroutine_job(
     args_list: list = None,
@@ -357,6 +411,9 @@ async def test_coroutine_job(
         f'{ex}')
     finally:
         session.close()
+
+def update_all_wraper(*args):
+    asyncio.run(update_all(*args))
 
 def update_wraper(*args):
     asyncio.run(update_table(*args))
