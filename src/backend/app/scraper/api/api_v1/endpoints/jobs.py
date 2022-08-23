@@ -71,8 +71,7 @@ async def update_all_tables(
         job: APSJob = scheduler.add_job(
             update_all_wraper,
             id = id,
-            name = 'Oбновление всех таблиц' + 
-            'полное' if fetch_all else 'с последней даты',
+            name = f'Oбновление всех таблиц {"полное" if fetch_all else "с последней даты"}',
             args=[fetch_all, id]
         )
         return JobOut(
@@ -87,6 +86,7 @@ async def update_all_tables(
 @router.get("/update/{table}", response_model=JobOut)
 async def update_table_job(
     table: str,
+    fetch_all: bool = False,
     scheduler: BaseScheduler = Depends(scheduler_service.get_scheduler)
 ):
     """Обновить указанную таблицу"""
@@ -96,7 +96,7 @@ async def update_table_job(
             update_wraper,
             id=id, 
             name=f"Обновление {table}", 
-            args=[table, id]
+            args=[table, id, fetch_all]
         )
         return JobOut(
             job_id=job.id,

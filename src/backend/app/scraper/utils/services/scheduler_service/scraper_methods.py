@@ -1,6 +1,8 @@
+from ast import stmt
 import asyncio
 import datetime
 from operator import rshift
+from unittest import result
 import uuid
 from dateutil import parser
 from aiohttp import ClientTimeout
@@ -9,7 +11,7 @@ import copy
 from yarl import URL
 from typing import Any, List
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select
+from sqlalchemy import select, desc
 import random
 from sqlalchemy.dialects.postgresql import insert
 import asyncpg
@@ -62,6 +64,60 @@ class Updater:
         """Конструктор запроса"""
         return URL(f'/{table_name}?{filter}') if filter \
             else URL(f'/{table_name}')
+    
+    def make_update_filter(self, value: str) -> 'str | None':
+        """Создать фильтр, с учётом последней даты"""
+        if value:
+            if self.table_name == 'rtpi_price_page':
+                return f'date_last_in_stock=gte.{value}'
+            if self.table_name == 'rtpi_product_name':
+                return f'moment=gte.{value}'
+            if self.table_name == 'rtpi_price':
+                return f'date_observe=gte.{value}'
+        return None
+
+    def get_last_date(self) -> 'str | None':
+        """Получить последнюю дату из таблицы"""
+        try:
+            session = sync_session()
+            date = None
+            if self.table_name == 'rtpi_price_page':
+                date = session.query(RtpiPricePage.date_last_in_stock). \
+                    order_by(desc(RtpiPricePage.date_last_in_stock)). \
+                        limit(1).first() 
+            if self.table_name == 'rtpi_product_name':
+                date = session.query(RtpiProductName.moment). \
+                    order_by(desc(RtpiProductName.moment)). \
+                        limit(1).first() 
+            if self.table_name == 'rtpi_price':
+                date = session.query(RtpiPrice.date_observe). \
+                    order_by(desc(RtpiPrice.date_observe)). \
+                        limit(1).first()                              
+            return date[0].strftime('%Y-%m-%dT%H:%M:%S') if date else date
+        except Exception as ex:
+            raise ex
+        finally:
+            session.close()
+
+    async def get_last_date_async(self) -> 'str | None':
+        """Получить последнюю дату из таблицы"""
+        async with async_session() as session:
+            stmt = None
+            if self.table_name == 'rtpi_price_page':
+                stmt = select(RtpiPricePage.date_last_in_stock). \
+                    order_by(desc(RtpiPricePage.date_last_in_stock)). \
+                        limit(1)
+            if self.table_name == 'rtpi_product_name':
+                stmt = select(RtpiProductName.moment). \
+                    order_by(desc(RtpiProductName.moment)). \
+                        limit(1)
+            if self.table_name == 'rtpi_price':
+                stmt = select(RtpiPrice.date_observe). \
+                    order_by(desc(RtpiPrice.date_observe)). \
+                        limit(1)
+            if stmt != None:
+                return (await session.scalars(stmt)).first().strftime('%Y-%m-%dT%H:%M:%S')
+            return None
 
     @staticmethod
     async def get_table_count(
@@ -339,14 +395,17 @@ class Updater:
 
 async def update_table(
     table_name: str,
-    self_id: str
+    self_id: str,
+    fetch_all: bool = False
 ):
     """Обновить указанную таблицу"""
     try:        
         updater = Updater(table_name)
-        count = await updater.get_table_count(table_name)
+        filter = None if fetch_all else \
+            updater.make_update_filter(updater.get_last_date())
+        count = await updater.get_table_count(table_name, filter)
         assert count != None
-        updater.url = Updater.request_builder(table_name)
+        updater.url = Updater.request_builder(table_name, filter)
         updater.produce_jobs(count, self_id)
     except AssertionError as ex:
         logger.error(f"При обновлении таблицы {table_name} не удалось получить кол-во строк")
@@ -373,7 +432,7 @@ async def update_all(
                 id=child_job_id,
                 name=f'Обновление {table}',
                 misfire_grace_time=None,
-                args=[table, child_job_id]
+                args=[table, child_job_id, fetch_all]
             )
     except Exception as ex:
         logger.error('При обновлении всех таблиц ' +
