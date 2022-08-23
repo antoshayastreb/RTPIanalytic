@@ -1,5 +1,7 @@
 import asyncio
 import datetime
+from operator import rshift
+import uuid
 from dateutil import parser
 from aiohttp import ClientTimeout
 import logging
@@ -24,7 +26,7 @@ from scraper.models import (
     RtpiPricePage,
     RtpiProductName
 )
-from scraper.db.session import async_session
+from scraper.db.session import async_session, sync_session
 
 tables = {
     'rtpi_price': RtpiPrice,
@@ -329,30 +331,71 @@ async def update_table(table_name: str):
 async def test_coroutine_job(
     args_list: list = None,
     delay: int = 0,
+    parent_id: str = None
 ):
     """Тестовый метод, без обращений к апи и к базе"""
-    start_time = datetime.datetime.now()
-    wait_time = random.randint(0, 10)
-    await asyncio.sleep(wait_time)
-    end_time = datetime.datetime.now()
-    print(f"Прождали {end_time-start_time} сек, начали {start_time}, закончили {end_time}")
-    if len(args_list) > 0:
-        await asyncio.sleep(delay)
-        args_list.pop()
-        scheduler = scheduler_service.get_scheduler()
-        job = scheduler.add_job(
-            test_job_wrapper,
-            misfire_grace_time=None,
-            args=[args_list, delay]
-        )
+    try:
+        session = sync_session()
+        start_time = datetime.datetime.now()
+        wait_time = random.randint(0, 10)
+        await asyncio.sleep(wait_time)
+        end_time = datetime.datetime.now()
+        print(f"Прождали {end_time-start_time} сек, начали {start_time}, закончили {end_time}")
+        if len(args_list) > 0:
+            await asyncio.sleep(delay)
+            args_list.pop()
+            scheduler = scheduler_service.get_scheduler()
+            id = JobHelper.get_prepared_job(parent_id, session, scheduler)
+            scheduler.add_job(
+                test_job_wrapper,
+                id=id,
+                misfire_grace_time=None,
+                args=[args_list, delay, parent_id]
+            )
+    except Exception as ex:
+        logger.error('В тестовой задаче произошла ошибка ' +
+        f'{ex}')
+    finally:
+        session.close()
 
 def update_wraper(*args):
     asyncio.run(update_table(*args))
+
+def test_job_main(
+    parent_id: str
+):
+    try:
+        session = sync_session()
+        main_args_list = [
+            i for i in range (0, 100)
+        ]
+        max = int(settings.MAX_CONCURENT_JOBS)
+        JobHelper.create_child_jobs(parent_id, len(main_args_list))
+        splited_list = JobHelper.split_list(main_args_list, max)
+        scheduler = scheduler_service.get_scheduler()
+        db_parent_job = JobHelper.get_job_by_id(parent_id, session)
+        if not db_parent_job:
+            raise ValueError('В базе отсутсвует основная задача, ' + 
+            'невозможно получить дочерние')
+        for idx, inner_list in enumerate(splited_list):
+            child_job_id = db_parent_job.child_jobs[idx].id
+            scheduler.add_job(
+                test_job_wrapper,
+                id = child_job_id,
+                args=[inner_list, 0, parent_id],
+                misfire_grace_time=None
+            )
+    except Exception as ex:
+        logger.error('Произошла ошибка в главной тестовой задаче ' +
+        f'{ex}')
+    finally:
+        session.close()
+    
 
 def test_job_wrapper(
         args_list: list = None, 
         delay: int = 0, 
         parent_id: str = None
     ):
-        asyncio.run(test_coroutine_job(args_list, delay))
+        asyncio.run(test_coroutine_job(args_list, delay, parent_id))
 

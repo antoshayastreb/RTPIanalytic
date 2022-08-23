@@ -2,19 +2,21 @@ import uuid
 from apscheduler.executors.pool import ThreadPoolExecutor
 from fastapi import APIRouter, Depends, HTTPException, status
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
+from typing import List
 
 from scraper.utils.services.scheduler_service import scheduler_service
 from scraper.schemas.job import (
     CurrentScheduledJobsResponse,
     CurrentScheduledJob,
-    JobCreateDeleteResponse
+    JobCreateDeleteResponse,
+    JobOut
 )
 from scraper.utils.exeption_handlers.scheduler import (
     JobNotFoundException
 )
 from scraper.utils.services.scheduler_service.scraper_methods import (
     update_wraper,
-    test_job_wrapper
+    test_job_main
 )
 
 from scraper.config import settings
@@ -33,7 +35,7 @@ async def get_all_scheduled_jobs(
             scheduled_jobs.append(
                 CurrentScheduledJob(
                     job_id=str(job.id),
-                    description=str(job.name),
+                    name=str(job.name),
                     next_run=str(job.next_run_time),
                     run_frequency=str(job.trigger)
                 )
@@ -73,29 +75,32 @@ async def update_table_job(
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
         detail=f"Возникла ошибка: {str(ex)}")
 
-@router.get("/test_coroutine")
+@router.get("/test_coroutine", response_model=JobOut)
 async def test_for_coroutine(
     scheduler: AsyncIOScheduler = Depends(scheduler_service.get_scheduler)
 ):
     try:
-        max = int(settings.MAX_CONCURENT_JOBS)
-        main_args_list = [
-            i for i in range (0, 100)
-        ]
-        splited_list = JobHelper.split_list(main_args_list, max)
-        for inner_list in splited_list:
-            id = str(uuid.uuid4())
-            job = scheduler.add_job(
-                test_job_wrapper,
-                id=id,
-                #max_instances=2,
-                misfire_grace_time=None,
-                args=[inner_list, 3],
-                kwargs={'parent_id':id}
-            )
-            # await JobHelper.store_job(
-            #     jobs=[job]
-            # )
+        id = str(uuid.uuid4())
+        job = scheduler.add_job(
+            test_job_main,
+            id=id,
+            misfire_grace_time=None,
+            args=[id]
+        )
+        return JobOut(
+            job_id=job.id,
+            name=job.name
+        )
+        # for inner_list in splited_list:
+
+        #     job = scheduler.add_job(
+        #         test_job_wrapper,
+        #         id=id,
+        #         #max_instances=2,
+        #         misfire_grace_time=None,
+        #         args=[inner_list, 3],
+        #         kwargs={'parent_id':id}
+        #     )
     except Exception as ex:
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
         detail=f"Возникла ошибка: {str(ex)}")

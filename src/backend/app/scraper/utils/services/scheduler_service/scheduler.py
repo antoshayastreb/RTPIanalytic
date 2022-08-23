@@ -31,12 +31,12 @@ job_defaults = {
 }
 
 def on_job_completed(event: JobEvent):
-    JobHelper.update_job(event.job_id)
+    JobHelper.complete_job(event.job_id)
 
 def on_job_added(event: JobEvent):
     scheduler = scheduler_service.get_scheduler()
     job = scheduler.get_job(event.job_id)
-    JobHelper.create_job([job])
+    JobHelper.start_job(job)
 
 
 class SchedulerService(object):

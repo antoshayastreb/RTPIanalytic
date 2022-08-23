@@ -4,7 +4,7 @@ from pydantic import BaseModel
 class JobBase(BaseModel):
     """Базовый класс схемы задачи"""
     job_id: str
-    description: Optional[str]
+    name: Optional[str]
 
 class CurrentScheduledJob(JobBase):
     """Запланированная задача"""
@@ -18,3 +18,6 @@ class CurrentScheduledJobsResponse(JobBase):
 class JobCreateDeleteResponse(JobBase):
     """Класс для создания/удаления задачи"""
     scheduled: bool
+
+class JobOut(JobBase):
+    pass

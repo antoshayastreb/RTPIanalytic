@@ -47,13 +47,14 @@ class Job(Base):
 
     def is_all_childs_completed(self) -> bool:
         """Проверка на завершенность всех дочерних задач"""
-        if not self.parent_job_id:
+        if not any(self.child_jobs):
             return True
-        return any([not x.time_completed for x in self.child_jobs])
+        return all([x.time_completed for x in self.child_jobs])
 
     def set_complete_date(self) -> None:
         """Установить дату заврешения задачи (пометить завершенной)"""
-        self.time_completed = datetime.datetime.now()
-        if self.parent_job and \
-            self.parent_job.is_all_childs_completed():
-            self.parent_job.set_complete_date()
+        if self.is_all_childs_completed():
+            self.time_completed = datetime.datetime.now()
+            if self.parent_job:
+                self.parent_job.set_complete_date()
+            

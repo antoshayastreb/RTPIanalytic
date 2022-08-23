@@ -1,10 +1,11 @@
 import datetime
 from typing import List, Any
+import uuid
 from apscheduler.job import Job as APSJob
+from apscheduler.schedulers.base import BaseScheduler
 import logging
 import json
-from apscheduler.schedulers.base import BaseScheduler
-from sqlalchemy import event
+from sqlalchemy.orm import Session
 
 from scraper.config import settings
 from scraper.models import Job as PersistanceJob
@@ -65,22 +66,42 @@ class JobHelper:
         ))
 
     @staticmethod
-    async def create_job_async(
-        jobs: List[APSJob],
-        parent_id = None
+    def start_job(
+        job: APSJob
+    ):
+        """Обновление информации на старте"""
+        try:
+            session = sync_session()
+            db_job: PersistanceJob = session.get(PersistanceJob, job.id)
+            if not db_job:
+                db_job = PersistanceJob(id = job.id)
+            db_job.func = str(job.func_ref)
+            db_job.name = job.name
+            db_job.args = [
+                str(arg) for arg in job.args
+            ]
+            db_job.time_started = datetime.datetime.now()
+            db_job.kwargs = json.dumps(job.kwargs)
+            #db_job.parent_job_id = parent_id
+            session.add(db_job)
+            session.commit()                
+        except Exception as ex:
+            logger.error('При сохранении информации о задачи ' +
+                f'возникла ошибка {ex}')
+        finally:
+            session.close()
+        
+    @staticmethod
+    async def create_child_jobs_async(
+        parent_id: str,
+        jobs_amount: int
     ):
         """Запись информации о задаче в базу данных"""
         async with async_session() as session:
             try:
-                for job in jobs:
+                for _ in range(jobs_amount):
                     db_job = PersistanceJob(
-                        id = job.id,
-                        name = job.name,
-                        args = [
-                            str(arg) for arg in job.args
-                        ],
-                        time_started = datetime.datetime.now(),
-                        kwargs = json.dumps(job.kwargs),
+                        id = str(uuid.uuid4()),
                         parent_job_id = parent_id
                     )
                     session.add(db_job)
@@ -90,22 +111,16 @@ class JobHelper:
                     f'возникла ошибка {ex}')
 
     @staticmethod
-    def create_job(
-        jobs: List[APSJob],
-        parent_id = None
+    def create_child_jobs(
+        parent_id: str,
+        jobs_amount: int
     ):
         """Запись информации о задаче в базу данных"""
         try:
             session = sync_session()
-            for job in jobs:
+            for _ in range(jobs_amount):
                 db_job = PersistanceJob(
-                    id = job.id,
-                    name = job.name,
-                    args = [
-                        str(arg) for arg in job.args
-                    ],
-                    time_started = datetime.datetime.now(),
-                    kwargs = json.dumps(job.kwargs),
+                    id = str(uuid.uuid4()),
                     parent_job_id = parent_id
                 )
                 session.add(db_job)
@@ -134,10 +149,10 @@ class JobHelper:
                 f'возникла ошибка {ex}')
 
     @staticmethod
-    def update_job(
+    def complete_job(
         id: str
     ):
-        "Обновление информации о задаче"
+        "Завершение задачи"
         session = sync_session()
         try:
             db_job: PersistanceJob = \
@@ -150,3 +165,39 @@ class JobHelper:
                 f'возникла ошибка {ex}')
         finally:
             session.close()
+
+    def get_job_by_id(
+        id: str,
+        session: Session
+    ):
+        """Получить задачу по id"""
+        try:
+            db_job: PersistanceJob = session.get(PersistanceJob, id)
+            return db_job
+        except Exception as ex:
+            logger.error('При получении задачи ' + 
+                f'возникла ошибка {ex}')
+            return None
+
+    def get_prepared_job(
+        parent_id: str,
+        session: Session,
+        scheduler: BaseScheduler
+    ):
+        """Получить дочернюю задачу, чьё выполнение ещё не началось"""
+        try:
+            db_job: PersistanceJob = session.query(PersistanceJob).filter_by(
+                parent_job_id = parent_id, time_started = None
+            ).first()
+            if not db_job:
+                raise ValueError('Искомая задача не найдена')
+            job = scheduler.get_job(db_job.id)
+            #Проверка на дублирующийся id
+            if job:
+                return JobHelper.get_prepared_job(parent_id, session, scheduler)
+            return db_job.id
+        except Exception as ex:
+            logger.error('При получении "подготовленной задачи" ' +
+            f'произошла ошибка {ex}')
+            return None
+        
