@@ -13,6 +13,7 @@ from apscheduler.events import (
 from fastapi import Request
 from random import randint
 
+from scraper.utils.exeptions.scheduler import SchedulerStopedException
 from scraper.config import settings
 from scraper.utils.help_func import JobHelper
 
@@ -77,6 +78,10 @@ class SchedulerService(object):
     
     def get_scheduler(self) -> BaseScheduler:
         return self.scheduler
+    
+    def scheduler_running_check(self) -> None:
+        if not self.scheduler.running:
+            raise SchedulerStopedException
 
 scheduler_service = SchedulerService()
 

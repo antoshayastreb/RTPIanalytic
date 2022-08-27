@@ -2,9 +2,18 @@ class SchedulerAlreadyPausedException(Exception):
     """Шедулер уже приостановлен"""
     pass
 
-class SchedulerAlreadyRunningException(Exception):
+class ShedulerAlreadyRunningButPaused(Exception):
+    """Шежулер запущен, но приостановлен"""
+    pass
+
+class SchedulerAlreadyResumedException(Exception):
     """Шедулер уже возобновлен"""
     pass
+
+class SchedulerAlreadyRunningException(Exception):
+    """Шедулер уже запущен"""
+    pass
+
 class SchedulerStopedException(Exception):
     """Шедулер в данный момент остановлен"""
     pass

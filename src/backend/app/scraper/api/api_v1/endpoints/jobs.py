@@ -24,7 +24,9 @@ from scraper.utils.services.scheduler_service.scraper_methods import (
 from scraper.config import settings
 from scraper.utils.help_func import JobHelper
 
-router = APIRouter()
+router = APIRouter(
+    dependencies=[Depends(scheduler_service.scheduler_running_check)]
+)
 
 @router.get("/all_scheduled", response_model=CurrentScheduledJobsResponse)
 async def get_all_scheduled_jobs(
