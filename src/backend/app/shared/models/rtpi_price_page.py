@@ -7,7 +7,7 @@ from sqlalchemy import (
     UniqueConstraint
 )
 
-from db.base_class import Base
+from shared.db.base_class import Base
 
 class RtpiPricePage(Base):
     id = Column(Integer, primary_key=True, index=True)

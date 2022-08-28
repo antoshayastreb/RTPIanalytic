@@ -9,9 +9,8 @@ from sqlalchemy.orm import (
     relationship
 )
 from sqlalchemy.dialects.postgresql import JSON, ARRAY
-from sqlalchemy.orm.collections import attribute_mapped_collection
 
-from db.base_class import Base
+from db.base import Base
 
 class Job(Base):
     """Класс для хранения в базе информации о задачах"""

@@ -3,9 +3,13 @@ from logging.config import fileConfig
 from sqlalchemy import engine_from_config
 from sqlalchemy import pool
 
+import sys
+from os.path import abspath, dirname
+sys.path.insert(0, dirname(dirname(dirname(abspath(__file__)))))
+
 # declarative base
-from db.base_class import Base
-import models
+from db.base import Base
+import scraper.models
 
 from alembic import context
 

@@ -7,7 +7,7 @@ from sqlalchemy import (
     UniqueConstraint
 )
 
-from db.base_class import Base
+from shared.db.base_class import Base
 
 class RtpiPrice(Base):
     id = Column(Integer, primary_key=True, index=True)
@@ -15,7 +15,7 @@ class RtpiPrice(Base):
     date_observe = Column(DateTime)
     stock_status = Column(Text, index=True)
     current_price = Column(BigInteger)
-    crosssed_price = Column(BigInteger)
+    crossed_price = Column(BigInteger)
     contributor_id = Column(Integer)
 
     #Уникальность по 'web_price_id' и 'date_observe'

@@ -224,7 +224,7 @@ class Updater:
                 set_={
                     "stock_status": stmt.excluded.stock_status,
                     "current_price": stmt.excluded.current_price,
-                    "crosssed_price": stmt.excluded.crosssed_price,
+                    "crossed_price": stmt.excluded.crossed_price,
                     "contributor_id": stmt.excluded.contributor_id
                 }
             )
@@ -275,12 +275,12 @@ class Updater:
             DO NOTHING;'''
             return sql   
         if table_name == "rtpi_price":
-            sql = '''INSERT INTO rtpiprice (web_price_id, date_observe, stock_status, current_price, crosssed_price, contributor_id) \
+            sql = '''INSERT INTO rtpiprice (web_price_id, date_observe, stock_status, current_price, crossed_price, contributor_id) \
             VALUES ($1,to_timestamp($2, 'YYYY-MM-DD T HH24:MI:SS:MS'),$3,$4,$5,$6) \
             ON CONFLICT ON CONSTRAINT web_price_id_date_observe_unique \
             DO UPDATE \
-            SET (stock_status, current_price, crosssed_price, contributor_id) \
-            = (excluded.stock_status, excluded.current_price, excluded.crosssed_price, excluded.contributor_id);'''
+            SET (stock_status, current_price, crossed_price, contributor_id) \
+            = (excluded.stock_status, excluded.current_price, excluded.crossed_price, excluded.contributor_id);'''
             return sql
 
     async def write_to_base(self, content: Any):

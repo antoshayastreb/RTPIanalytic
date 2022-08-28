@@ -24,7 +24,7 @@ def upgrade() -> None:
     sa.Column('date_observe', sa.DateTime(), nullable=True),
     sa.Column('stock_status', sa.Text(), nullable=True),
     sa.Column('current_price', sa.BigInteger(), nullable=True),
-    sa.Column('crosssed_price', sa.BigInteger(), nullable=True),
+    sa.Column('crossed_price', sa.BigInteger(), nullable=True),
     sa.Column('contributor_id', sa.Integer(), nullable=True),
     sa.PrimaryKeyConstraint('id'),
     sa.UniqueConstraint('web_price_id', 'date_observe', name='web_price_id_date_observe_unique')
