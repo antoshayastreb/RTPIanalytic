@@ -30,9 +30,9 @@ class Settings(BaseSettings):
     #Стандартные эндпоинты
     API_V1_STR: str = "/api/v1"
     DOCS_URL: str = "/api/docs"
-    #Наименование сервера
+    #Наименование сервиса
     SERVICE_NAME: str = "'Automatic' RTPI API scraper"
-    #Настройки для подключения к базе
+    #Настройки для подключения к базе данных
     POSTGRES_SERVER: str
     POSTGRES_USER: str
     POSTGRES_PASSWORD: str
@@ -40,7 +40,7 @@ class Settings(BaseSettings):
     POSTGRES_PORT: Optional[str] = None
     SQLALCHEMY_DATABASE_URI: Optional[PostgresDsn] = None
     ASYNC_SQLALCHEMY_DATABASE_URI: Optional[PostgresDsn] = None
-    #Отобрадать детализацию по каждому запросу
+    #Отображать детализацию по каждому запросу к базе данных
     SESSION_ECHO: Optional[str] = 'False'
     #Валидация строки подключения
     @validator("SQLALCHEMY_DATABASE_URI", pre=True)
@@ -73,11 +73,11 @@ class Settings(BaseSettings):
     #Общее время ожидание запроса,
     #включающее соединение, отправку и чтение запроса
     CLIENT_TIMEOUT_GET_COUNT: str = '600' #секунд
+    #Время на получение данных
     CLIENT_TIMEOUT_GET_CONTENT: str = '180'
     CLIENT_RETRY_ATTEMPTS: str = '3'
     #Настройки для APScheduler
-    #MAX_INSTANCES: str = '4'
-    #Настройка регулирующая сколько одновремно задач будет
+    #Настройка, регулирующая сколько одновременных задач будет
     #запущено
     MAX_CONCURENT_JOBS: str = '2'
     COALESCE: str = 'True'
