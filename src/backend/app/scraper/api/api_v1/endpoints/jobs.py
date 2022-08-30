@@ -21,10 +21,7 @@ from scraper.utils.services.scheduler_service.scraper_methods import (
     update_all_wraper,
     test_job_main
 )
-from scraper.crud.jobs import (
-    get_job_estimated_time_async,
-    get_job_estimated_time
-)
+
 from scraper.config import settings
 from scraper.utils.help_func import JobHelper
 from scraper.db.session import get_session, get_sync_session
@@ -156,11 +153,3 @@ async def test_for_coroutine(
     except Exception as ex:
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
         detail=f"Возникла ошибка: {str(ex)}")
-
-# @router.get("/get_job_estimated_time")
-# async def job_estimated_time(
-#     job_id: str,
-#     session=Depends(get_sync_session),
-# ):
-#     """Получить расчетное время выполнения задачи"""
-#     return get_job_estimated_time(job_id, session)
