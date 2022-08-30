@@ -10,7 +10,8 @@ from scraper.schemas.job import (
     CurrentScheduledJobsResponse,
     CurrentScheduledJob,
     JobCreateDeleteResponse,
-    JobOut
+    JobOut,
+    JobOutExtendedInfo
 )
 from scraper.utils.exeption_handlers.scheduler import (
     JobNotFoundException
@@ -20,47 +21,75 @@ from scraper.utils.services.scheduler_service.scraper_methods import (
     update_all_wraper,
     test_job_main
 )
-
+from scraper.crud.jobs import (
+    get_job_estimated_time_async,
+    get_job_estimated_time
+)
 from scraper.config import settings
 from scraper.utils.help_func import JobHelper
+from scraper.db.session import get_session, get_sync_session
+from scraper.crud.jobs import job_crud
 
 router = APIRouter(
     dependencies=[Depends(scheduler_service.scheduler_running_check)]
 )
 
-@router.get("/all_scheduled", response_model=CurrentScheduledJobsResponse)
-async def get_all_scheduled_jobs(
-    scheduler: BaseScheduler = Depends(scheduler_service.get_scheduler)
-):
-    """Получить все запланированые задачи"""
-    try:
-        scheduled_jobs = [CurrentScheduledJob]
-        for job in scheduler.get_jobs():
-            scheduled_jobs.append(
-                CurrentScheduledJob(
-                    job_id=str(job.id),
-                    name=str(job.name),
-                    next_run=str(job.next_run_time),
-                    run_frequency=str(job.trigger)
-                )
-            )
-    except Exception as ex:
-        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-        detail=f"Возникла ошибка: {str(ex)}")
-
-@router.delete("/delete/{job_id}", response_model=JobCreateDeleteResponse)
-async def delete_job(
+@router.get("/{job_id}/basic_info", response_model=JobOut)
+async def get_job_basic_info(
     job_id: str,
-    scheduler: BaseScheduler = Depends(scheduler_service.get_scheduler)
+    session=Depends(get_sync_session)
 ):
-    """Удалить задачу"""
-    if not scheduler.get_job(job_id):
+    """Получить базовую информацию по задаче из базы"""
+    job = job_crud.get(session, job_id)
+    if not job:
         raise JobNotFoundException(job_id)
-    try:
-        scheduler.remove_job(job_id)
-    except Exception as ex:
-        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-        detail=f"При удалени задачи возникла ошибка {str(ex)}")
+    return job
+
+@router.get("/{job_id}/extended_info", response_model=JobOutExtendedInfo)
+async def get_job_extended_info(
+    job_id: str,
+    session=Depends(get_sync_session)
+):
+    """Получить полную информацию по задаче из базы"""
+    job = job_crud.get_job_extended_info(session, job_id)
+    if not job:
+        raise JobNotFoundException(job_id)
+    return job
+
+
+# @router.get("/all_scheduled", response_model=CurrentScheduledJobsResponse)
+# async def get_all_scheduled_jobs(
+#     scheduler: BaseScheduler = Depends(scheduler_service.get_scheduler)
+# ):
+#     """Получить все запланированые задачи"""
+#     try:
+#         scheduled_jobs = [CurrentScheduledJob]
+#         for job in scheduler.get_jobs():
+#             scheduled_jobs.append(
+#                 CurrentScheduledJob(
+#                     job_id=str(job.id),
+#                     name=str(job.name),
+#                     next_run=str(job.next_run_time),
+#                     run_frequency=str(job.trigger)
+#                 )
+#             )
+#     except Exception as ex:
+#         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+#         detail=f"Возникла ошибка: {str(ex)}")
+
+# @router.delete("/delete/{job_id}", response_model=JobCreateDeleteResponse)
+# async def delete_job(
+#     job_id: str,
+#     scheduler: BaseScheduler = Depends(scheduler_service.get_scheduler)
+# ):
+#     """Удалить задачу"""
+#     if not scheduler.get_job(job_id):
+#         raise JobNotFoundException(job_id)
+#     try:
+#         scheduler.remove_job(job_id)
+#     except Exception as ex:
+#         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+#         detail=f"При удалени задачи возникла ошибка {str(ex)}")
 
 @router.get("/update_all", response_model=JobOut)
 async def update_all_tables(
@@ -127,3 +156,11 @@ async def test_for_coroutine(
     except Exception as ex:
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
         detail=f"Возникла ошибка: {str(ex)}")
+
+# @router.get("/get_job_estimated_time")
+# async def job_estimated_time(
+#     job_id: str,
+#     session=Depends(get_sync_session),
+# ):
+#     """Получить расчетное время выполнения задачи"""
+#     return get_job_estimated_time(job_id, session)

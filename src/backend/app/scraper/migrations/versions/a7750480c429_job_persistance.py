@@ -1,8 +1,8 @@
-"""Persistent jobs
+"""job persistance
 
-Revision ID: 232c6322596b
+Revision ID: a7750480c429
 Revises: 9ca2b8559232
-Create Date: 2022-08-22 03:54:42.757375
+Create Date: 2022-08-28 22:11:41.029249
 
 """
 from alembic import op
@@ -10,7 +10,7 @@ import sqlalchemy as sa
 from sqlalchemy.dialects import postgresql
 
 # revision identifiers, used by Alembic.
-revision = '232c6322596b'
+revision = 'a7750480c429'
 down_revision = '9ca2b8559232'
 branch_labels = None
 depends_on = None

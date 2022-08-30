@@ -30,3 +30,10 @@ sync_session = sessionmaker(
 async def get_session() -> AsyncSession:
     async with async_session() as session:
         yield session
+
+def get_sync_session():
+    db = sync_session()
+    try:
+        yield db
+    finally:
+        db.close()
