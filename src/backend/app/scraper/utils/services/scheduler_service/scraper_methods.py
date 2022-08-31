@@ -167,22 +167,25 @@ class Updater:
             if content:
                 await self.asyncpg_insert(content)
                 #await self.write_to_base(content)
-                if len(ranges) > 0:
-                    await asyncio.sleep(delay)
-                    session = sync_session()
-                    scheduler = scheduler_service.get_scheduler()
-                    #id = JobHelper.get_prepared_job(parent_id, session, scheduler)
-                    id = job_crud.get_prepared_job(session, parent_id, scheduler)
-                    scheduler.add_job(
-                        self.get_content_wraper,
-                        id = id,
-                        name=f'{self.table_name} {ranges[-1]}',
-                        misfire_grace_time=None,
-                        args=[ranges, 5, parent_id]
-                    )
         except Exception as ex:
             logger.error(f"Произошла ошибка при получении данных для таблицы {self.table_name} \
                 в диапазоне {range}: {ex}")
+            raise ex
+        finally:
+            if len(ranges) > 0:
+                await asyncio.sleep(delay)
+                session = sync_session()
+                scheduler = scheduler_service.get_scheduler()
+                #id = JobHelper.get_prepared_job(parent_id, session, scheduler)
+                id = job_crud.get_prepared_job(session, parent_id, scheduler)
+                scheduler.add_job(
+                    self.get_content_wraper,
+                    id = id,
+                    name=f'{self.table_name} {ranges[-1]}',
+                    misfire_grace_time=None,
+                    args=[ranges, 5, parent_id]
+                )
+
 
     def get_stmt(self, content: Any):
         #model = tables[self.table_name]

@@ -45,6 +45,7 @@ class JobOut(JobBase):
     completion_time: Optional[timedelta]
     parent_job_id: Optional[str]
     total_job_progress: Optional[int]
+    errors_amount: Optional[int]
 
     class Config:
         json_encoders = {
@@ -68,6 +69,7 @@ class JobOutExtendedInfo(JobOut):
     completed_child_jobs: Optional[List[str]]
     not_yet_started_child_jobs: Optional[List[str]]
     started_child_jobs: Optional[List[str]]
+    child_jobs_with_error: Optional[List[str]]
 
     class Config:
         json_encoders = {
@@ -87,7 +89,8 @@ class JobOutExtendedInfo(JobOut):
                         'child_jobs',
                         'completed_child_jobs',
                         'not_yet_started_child_jobs',
-                        'started_child_jobs'
+                        'started_child_jobs',
+                        'child_jobs_with_error'
                     ):
                     return [item.id for item in value]
                 else:

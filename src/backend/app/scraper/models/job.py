@@ -72,6 +72,12 @@ class Job(Base):
             if job.time_started and not job.time_completed]
 
     @hybrid_property
+    def child_jobs_with_error(self) -> 'list[Job]':
+        """Дочерние задачи с ошибкой"""
+        return [job for job in self.completed_child_jobs \
+            if job.exception_text]
+
+    @hybrid_property
     def completed_child_jobs_amount(self) -> int:
         """Количество завершенных дочерних задач"""
         return len(self.completed_child_jobs)
@@ -103,7 +109,7 @@ class Job(Base):
             for job in self.child_jobs])
         if childs_total_sum == 0:
             return self.child_jobs_amount
-        return childs_total_sum
+        return childs_total_sum + self.child_jobs_amount
 
     @hybrid_property
     def total_completed_jobs_amount(self) -> int:
@@ -119,7 +125,12 @@ class Job(Base):
             for job in self.completed_child_jobs])
         if childs_total_sum == 0:
             return self.completed_child_jobs_amount
-        return childs_total_sum
+        return childs_total_sum + self.completed_child_jobs_amount
+
+    @hybrid_property
+    def child_jobs_with_error_amount(self) -> int:
+        """Количество дочерних задач с ошибкой"""
+        return len(self.child_jobs_with_error)
 
     @hybrid_property
     def total_job_progress(self) -> int:
@@ -128,8 +139,10 @@ class Job(Base):
         дочерние дочерних.
         """
         #return f'{self.total_completed_jobs_amount}/{self.total_child_jobs_amount}'
-        if self.child_jobs_amount == 0:
+        if self.total_child_jobs_amount == 0:
             return 100 if self.time_completed else 0
+        if self.total_completed_jobs_amount == 0:
+            return 0
         return round(self.total_completed_jobs_amount / self.total_child_jobs_amount \
             * 100)
 
@@ -141,8 +154,17 @@ class Job(Base):
         #return f'{self.total_completed_jobs_amount}/{self.total_child_jobs_amount}'
         if self.child_jobs_amount == 0:
             return 100 if self.time_completed else 0
+        if self.completed_child_jobs_amount == 0:
+            return 0
         return round(self.completed_child_jobs_amount / self.child_jobs_amount \
             * 100)
+
+    @hybrid_property
+    def errors_amount(self) -> int:
+        """Возвращает количество ошибок, связанных с этой задачей"""
+        if self.child_jobs_amount == 0:
+            return 1 if self.exception_text else 0
+        return sum([job.errors_amount for job in self.completed_child_jobs])
 
     @hybrid_property
     def estimated_time(self) -> 'datetime.timedelta | None':
@@ -159,8 +181,10 @@ class Job(Base):
         child_jobs_time = [
             job.estimated_time for job in self.completed_child_jobs
         ]
+        if len(child_jobs_time) == 0:
+            return None
         return sum(child_jobs_time, datetime.timedelta()) // len(child_jobs_time) \
-        * self.not_yet_started_child_jobs_amount
+            * self.not_yet_started_child_jobs_amount
 
     def __repr__(self) -> str:
         return "Job(name=%r, id=%r, parent_job_id=%r)" % (
