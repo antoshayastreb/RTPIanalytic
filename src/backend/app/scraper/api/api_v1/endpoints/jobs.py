@@ -20,7 +20,8 @@ from scraper.utils.exeption_handlers.scheduler import (
 from scraper.utils.services.scheduler_service.scraper_methods import (
     update_wraper,
     update_all_wraper,
-    test_job_main
+    test_job_main,
+    jobs_clean_up
 )
 
 from scraper.config import settings
@@ -143,6 +144,25 @@ async def test_for_coroutine(
             id=id,
             misfire_grace_time=None,
             args=[id]
+        )
+        return job_crud.get(session, id)
+    except Exception as ex:
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+        detail=f"Возникла ошибка: {str(ex)}")
+
+@router.get("/clean_up_jobs", response_model=JobOut)
+async def clean_up_jobs(
+    scheduler: BaseScheduler = Depends(scheduler_service.get_scheduler),
+    session: Session = Depends(get_sync_session)    
+):
+    """Удалить застывшие задачи"""
+    try:
+        id = str(uuid.uuid4())
+        scheduler.add_job(
+            jobs_clean_up,
+            name="Очистка задач",
+            id=id,
+            misfire_grace_time=None
         )
         return job_crud.get(session, id)
     except Exception as ex:

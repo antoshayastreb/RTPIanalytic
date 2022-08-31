@@ -83,6 +83,9 @@ class Settings(BaseSettings):
     COALESCE: str = 'True'
     #MAX_WORKERS: str = '4'
     TABLE_LIMIT: str = '100000'
+    #Удалить задачу через ... минут
+    DELETE_COMPLETE_JOB_AFTER: str = '1440'
+    DELETE_STALLED_JOB_AFTER: str = '60'
     #Настройки для Pydantic BaseSettings
     class Config:
         env_file = '~/.env'

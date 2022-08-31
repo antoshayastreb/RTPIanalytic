@@ -526,7 +526,6 @@ def test_job_main(
     finally:
         session.close()
     
-
 def test_job_wrapper(
         args_list: list = None, 
         delay: int = 0, 
@@ -534,3 +533,19 @@ def test_job_wrapper(
     ):
         asyncio.run(test_coroutine_job(args_list, delay, parent_id))
 
+def jobs_clean_up():
+    """Удаление старых, застывших, пустых задач"""
+    try:
+        #complete_job_deletion = int(settings.DELETE_COMPLETE_JOB_AFTER)
+        session = sync_session()
+        job_list = []
+        job_list.extend(job_crud.get_empty_jobs(session))
+        job_list.extend(job_crud.get_stalled_jobs(session))
+        job_list.extend(job_crud.get_old_completed_jobs(session))
+        for job in job_list:
+            session.delete(job)
+        session.commit()
+    except Exception as ex:
+        raise ex
+    finally: 
+        session.close()
