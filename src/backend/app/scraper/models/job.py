@@ -25,6 +25,7 @@ class Job(Base):
     time_started = Column(DateTime)
     time_completed = Column(DateTime)
     completion_time = column_property(time_completed - time_started)
+    exception_text = Column(String)
     #pending = Column(Boolean)
     # coalesce = Column(Boolean)
     # max_instances = Column(Integer)

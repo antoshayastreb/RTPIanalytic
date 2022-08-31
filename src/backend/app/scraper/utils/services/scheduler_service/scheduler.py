@@ -4,13 +4,12 @@ from apscheduler.executors.pool import ThreadPoolExecutor, ProcessPoolExecutor
 from apscheduler.jobstores.sqlalchemy import SQLAlchemyJobStore
 from apscheduler.schedulers.background import BackgroundScheduler
 from apscheduler.schedulers.base import BaseScheduler
-from apscheduler.events import JobEvent
+from apscheduler.events import JobExecutionEvent
 from apscheduler.events import (
     EVENT_JOB_EXECUTED,
     EVENT_JOB_ERROR,
     EVENT_JOB_ADDED
 )
-from fastapi import Request
 from random import randint
 
 from scraper.utils.exeptions.scheduler import SchedulerStopedException
@@ -28,13 +27,16 @@ executors = {
 
 job_defaults = {
     'coalesce': settings.COALESCE.lower() == 'true',
-    #'max_instances': int(settings.MAX_CONCURENT_JOBS)
+    'max_instances': 20
 }
 
-def on_job_completed(event: JobEvent):
-    JobHelper.complete_job(event.job_id)
+def on_job_completed(event: JobExecutionEvent):
+    JobHelper.complete_job(event.job_id, event.exception)
 
-def on_job_added(event: JobEvent):
+# def on_job_error(event: JobExecutionEvent):
+#     JobHelper.complete_job(event.job_id, event.exception)
+
+def on_job_added(event: JobExecutionEvent):
     scheduler = scheduler_service.get_scheduler()
     job = scheduler.get_job(event.job_id)
     JobHelper.start_job(job)

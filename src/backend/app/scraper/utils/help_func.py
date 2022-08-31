@@ -1,11 +1,19 @@
 import datetime
+import psycopg2
 from typing import List, Any
 import uuid
 from apscheduler.job import Job as APSJob
 from apscheduler.schedulers.base import BaseScheduler
+from apscheduler.util import undefined
 import logging
 import json
 from sqlalchemy.orm import Session
+from tenacity import (
+    retry,
+    stop_after_attempt,
+    retry_if_not_exception_type
+)
+from tenacity.wait import wait_fixed
 
 from scraper.config import settings
 from scraper.models import Job as PersistanceJob
@@ -26,9 +34,6 @@ class JobHelper:
 
     @staticmethod
     def __split_list(origin_list: List[Any], list_count: int):
-        #list_len = len(origin_list)
-        #assert list_len > 0
-        #sub_list_len = len(list) // list_len
         k, m = divmod(len(origin_list), list_count)
         for i in range(list_count):
             yield origin_list[i*k+min(i, m):(i+1)*k+min(i+1, m)]
@@ -78,7 +83,7 @@ class JobHelper:
             db_job.func = str(job.func_ref)
             db_job.name = job.name
             db_job.args = [
-                str(arg) for arg in job.args
+                        str(arg) for arg in job.args
             ]
             db_job.time_started = datetime.datetime.now()
             db_job.kwargs = json.dumps(job.kwargs)
@@ -119,11 +124,16 @@ class JobHelper:
         try:
             session = sync_session()
             for _ in range(jobs_amount):
+                # new_job = JobCreate(
+                #     id=str(uuid.uuid4()),
+                #     parent_job_id = parent_id
+                # )
+                # job_crud.create(session=session, obj_in=new_job)
                 db_job = PersistanceJob(
                     id = str(uuid.uuid4()),
                     parent_job_id = parent_id
                 )
-                session.add(db_job)
+                session.add(db_job)                
             session.commit()                
         except Exception as ex:
             logger.error('При сохранении информации о задачи ' +
@@ -150,7 +160,8 @@ class JobHelper:
 
     @staticmethod
     def complete_job(
-        id: str
+        id: str,
+        exception: Any = None
     ):
         "Завершение задачи"
         session = sync_session()
@@ -159,6 +170,8 @@ class JobHelper:
                 session.get(PersistanceJob, id)
             if db_job:
                 db_job.set_complete_date()
+                if exception:
+                    db_job.exception_text = str(exception)
             session.commit()
         except Exception as ex:
             logger.error('При обновлении задачи ' +
@@ -166,40 +179,78 @@ class JobHelper:
         finally:
             session.close()
 
-    def get_job_by_id(
-        id: str,
-        session: Session
-    ):
-        """Получить задачу по id"""
-        try:
-            db_job: PersistanceJob = session.get(PersistanceJob, id)
-            return db_job
-        except Exception as ex:
-            logger.error('При получении задачи ' + 
-                f'возникла ошибка {ex}')
-            return None
-
+    @staticmethod
     def get_prepared_job(
         parent_id: str,
         session: Session,
-        scheduler: BaseScheduler
+        scheduler: BaseScheduler = None
     ):
         """Получить дочернюю задачу, чьё выполнение ещё не началось"""
-        try:
-            db_job: PersistanceJob = session.query(PersistanceJob).filter_by(
-                parent_job_id = parent_id, time_started = None
-            ).first()
-            if not db_job:
-                raise ValueError('Искомая задача не найдена')
-            job = scheduler.get_job(db_job.id)
-            #Проверка на дублирующийся id
-            if job:
-                return JobHelper.get_prepared_job(parent_id, session, scheduler)
-            return db_job.id
-        except Exception as ex:
-            logger.error('При получении "подготовленной задачи" ' +
-            f'произошла ошибка {ex}')
-            return None
+        # try:
+        #     db_job: PersistanceJob = session.query(PersistanceJob).filter_by(
+        #         parent_job_id = parent_id, time_started = None
+        #     ).first()
+        #     if not db_job:
+        #         raise ValueError('Не удается получить дочернюю задачу')
+        #     job = scheduler.get_job(db_job.id)
+        #     #Проверка на дублирующийся id
+        #     if job:
+        #         return JobHelper.get_prepared_job(parent_id, session, scheduler)
+        #     return db_job.id
+        # except Exception as ex:
+        #     logger.error('При получении "подготовленной задачи" ' +
+        #     f'произошла ошибка {ex}')
+        #     return None
+        db_job: PersistanceJob = session.query(PersistanceJob).filter_by(
+            parent_job_id = parent_id, time_started = None
+        ).first()
+        return db_job
+
+    @retry(
+        stop=stop_after_attempt(int(settings.CLIENT_RETRY_ATTEMPTS)),
+        wait=wait_fixed(2),
+        retry=retry_if_not_exception_type(psycopg2.errors.UniqueViolation)
+    )
+    def try_to_add_prepared_job(
+        parent_id: str,
+        session: Session,
+        scheduler: BaseScheduler,
+        func,
+        trigger=None,
+        args=None,
+        kwargs=None,
+        name=None,
+        misfire_grace_time=undefined,
+        coalesce=undefined,
+        max_instances=undefined,
+        next_run_time=undefined,
+        jobstore='default',
+        executor='default',
+        replace_existing=False,
+        **trigger_args: Any
+    ):
+        """Попытка добавить задачу в шедулер"""
+        prepared_job = JobHelper.get_prepared_job(parent_id, session)
+        if not prepared_job:
+            raise ValueError('Не удается получить дочернюю задачу')
+        scheduler.add_job(
+            func=func,
+            trigger=trigger,
+            args=args,
+            kwargs=kwargs,
+            id=prepared_job.id,
+            name=name,
+            misfire_grace_time=misfire_grace_time,
+            coalesce=coalesce,
+            max_instances=max_instances,
+            next_run_time=next_run_time,
+            jobstore=jobstore,
+            executor=executor,
+            replace_existing=replace_existing,
+            **trigger_args
+        )
+
+
 
 class SerializerHelper:
     """Сборник вспомогательных функций для сериализации"""

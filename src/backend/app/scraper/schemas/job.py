@@ -39,6 +39,7 @@ class JobOut(JobBase):
     func: Optional[str]
     args: Optional[List[str]]
     kwargs: Optional[str]
+    exception_text: Optional[str]
     time_started: Optional[datetime]
     time_completed: Optional[datetime]
     completion_time: Optional[timedelta]

@@ -28,6 +28,7 @@ from scraper.models import (
     RtpiProductName,
     Job as PersistanceJob
 )
+from scraper.crud.jobs import job_crud
 from scraper.db.session import async_session, sync_session
 
 tables = {
@@ -170,7 +171,8 @@ class Updater:
                     await asyncio.sleep(delay)
                     session = sync_session()
                     scheduler = scheduler_service.get_scheduler()
-                    id = JobHelper.get_prepared_job(parent_id, session, scheduler)
+                    #id = JobHelper.get_prepared_job(parent_id, session, scheduler)
+                    id = job_crud.get_prepared_job(session, parent_id, scheduler)
                     scheduler.add_job(
                         self.get_content_wraper,
                         id = id,
@@ -370,7 +372,8 @@ class Updater:
             jobs_amount = sum(len(x) for x in range_list)
             JobHelper.create_child_jobs(parent_id, jobs_amount)
             session = sync_session()
-            db_parent_job = JobHelper.get_job_by_id(parent_id, session)
+            #db_parent_job = JobHelper.get_job_by_id(parent_id, session)
+            db_parent_job = job_crud.get(session, parent_id)
             if not db_parent_job:
                 raise ValueError('В базе отсутсвует основная задача, ' + 
                 'невозможно получить дочерние')
@@ -421,7 +424,8 @@ async def update_all(
         scheduler = scheduler_service.get_scheduler()
         await JobHelper.create_child_jobs_async(parent_id, len(tables))
         session = sync_session()
-        db_parent_job = JobHelper.get_job_by_id(parent_id, session)
+        #db_parent_job = JobHelper.get_job_by_id(parent_id, session)
+        db_parent_job = job_crud.get(session, parent_id)
         if not db_parent_job:
                 raise ValueError('В базе отсутсвует основная задача, ' + 
                 'невозможно получить дочерние')
@@ -452,23 +456,33 @@ async def test_coroutine_job(
         start_time = datetime.datetime.now()
         wait_time = random.randint(0, 10)
         await asyncio.sleep(wait_time)
+        args_list.pop()
         end_time = datetime.datetime.now()
         print(f"Прождали {end_time-start_time} сек, начали {start_time}, закончили {end_time}")
+    except Exception as ex:
+        # logger.error('В тестовой задаче произошла ошибка ' +
+        # f'{ex}')
+        raise ex
+    finally:
         if len(args_list) > 0:
             await asyncio.sleep(delay)
-            args_list.pop()
             scheduler = scheduler_service.get_scheduler()
-            id = JobHelper.get_prepared_job(parent_id, session, scheduler)
-            scheduler.add_job(
-                test_job_wrapper,
-                id=id,
+            JobHelper.try_to_add_prepared_job(
+                parent_id=parent_id,
+                session=session,
+                scheduler=scheduler,
+                func=test_job_wrapper,
                 misfire_grace_time=None,
-                args=[args_list, delay, parent_id]
+                args=[args_list, delay, parent_id]                
             )
-    except Exception as ex:
-        logger.error('В тестовой задаче произошла ошибка ' +
-        f'{ex}')
-    finally:
+            #id = JobHelper.get_prepared_job(parent_id, session, scheduler)
+            # id = job_crud.get_prepared_job(session, parent_id, scheduler)
+            # scheduler.add_job(
+            #     test_job_wrapper,
+            #     id=id,
+            #     misfire_grace_time=None,
+            #     args=[args_list, delay, parent_id]
+            # )
         session.close()
 
 def update_all_wraper(*args):
@@ -489,7 +503,8 @@ def test_job_main(
         JobHelper.create_child_jobs(parent_id, len(main_args_list))
         splited_list = JobHelper.split_list(main_args_list, max)
         scheduler = scheduler_service.get_scheduler()
-        db_parent_job = JobHelper.get_job_by_id(parent_id, session)
+        #db_parent_job = JobHelper.get_job_by_id(parent_id, session)
+        db_parent_job = job_crud.get(session, parent_id)
         if not db_parent_job:
             raise ValueError('В базе отсутсвует основная задача, ' + 
             'невозможно получить дочерние')
@@ -502,8 +517,9 @@ def test_job_main(
                 misfire_grace_time=None
             )
     except Exception as ex:
-        logger.error('Произошла ошибка в главной тестовой задаче ' +
-        f'{ex}')
+        # logger.error('Произошла ошибка в главной тестовой задаче ' +
+        # f'{ex}')
+        raise ex
     finally:
         session.close()
     

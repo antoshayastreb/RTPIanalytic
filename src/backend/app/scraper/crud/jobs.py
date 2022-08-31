@@ -1,10 +1,7 @@
-from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import Session
-from sqlalchemy import select
-from sqlalchemy.orm import selectinload
 import logging
-from datetime import timedelta
 from typing import Optional
+from apscheduler.schedulers.base import BaseScheduler
 
 from scraper.models import Job as PersistanceJob
 from scraper.utils.exeptions.scheduler import JobNotFoundException
@@ -19,71 +16,24 @@ class JobCrud(CRUDBase[PersistanceJob, JobCreate, JobUpdate]):
         """Получить детальную информацию по задаче"""
         return session.query(self.model).filter(self.model.id == id).first()
 
-
-async def get_job_by_id_async(
-    job_id: str,
-    session: AsyncSession
-) -> 'PersistanceJob | None':
-    """Получить задачу из базы по id"""
-    try:
-        result = await session.execute(
-            select(PersistanceJob)
-            .where(PersistanceJob.id == job_id)
-            .options(selectinload(PersistanceJob.child_jobs)))
-        job = result.scalar_one_or_none()
-        assert job != None
-        return job
-    except Exception as ex:
-        if isinstance(ex, AssertionError):
-            raise JobNotFoundException
-        else:
-            logger.error(f"При получении задачи с id {job_id} " + 
-            f"произошла ошибка: {ex}")
-            return None
-
-def get_job_by_id(
-    job_id: str,
-    session: Session
-) -> 'PersistanceJob | None':
-    """Получить задачу из базы по id"""
-    try:
-        job = session.get(PersistanceJob, job_id)
-        assert job != None
-        return job
-    except Exception as ex:
-        if isinstance(ex, AssertionError):
-            raise JobNotFoundException
-        else:
-            logger.error(f"При получении задачи с id {job_id} " + 
-            f"произошла ошибка: {ex}")
-            return None
-
-async def get_job_estimated_time_async(
-    job_id: str,
-    session: AsyncSession
-) -> 'timedelta | None':
-    """Получить расчетное время задачи"""
-    job = await get_job_by_id_async(job_id, session)
-    if job != None:
-        return job.child_jobs_amount
-    return None
-
-def get_job_estimated_time(
-    job_id: str,
-    session: Session
-) -> 'timedelta | None':
-    """Получить расчетное время задачи"""
-    job = get_job_by_id(job_id, session)
-    if job != None:
-        return job.estimated_time
-    return None
-
-def get_job_progress(
-    job_id: str,
-    sesssion: Session
-) -> int:
-    """Получить прогресс задачи"""
-    job = get_job_by_id(job_id, sesssion)
-
+    def get_prepared_job(
+            self,
+            session: Session, 
+            parent_id: str,
+            scheduler: BaseScheduler = None
+        ) -> Optional[JobOutExtendedInfo]:
+        """Получить дочернюю задачу, чьё выполнение ещё не началось"""
+        db_job = session.query(self.model).filter_by(parent_job_id = parent_id,
+            time_started = None
+        ).first()
+        if not db_job:
+            raise ValueError('Не найденно ни одной подготовленной задачи ' +
+            f'для родительской задачи {parent_id}')
+        if scheduler:
+            job = scheduler.get_job(db_job.id)
+            if job:
+                return self.get_prepared_job(session, parent_id, scheduler)
+        return db_job.id
+        
 
 job_crud = JobCrud(PersistanceJob)
