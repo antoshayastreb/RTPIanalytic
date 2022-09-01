@@ -70,31 +70,6 @@ class JobHelper:
             JobHelper.__range_builder(table_count), list_count
         ))
 
-    @staticmethod
-    def start_job(
-        job: APSJob
-    ):
-        """Обновление информации на старте"""
-        try:
-            session = sync_session()
-            db_job: PersistanceJob = session.get(PersistanceJob, job.id)
-            if not db_job:
-                db_job = PersistanceJob(id = job.id)
-            db_job.func = str(job.func_ref)
-            db_job.name = job.name
-            db_job.args = [
-                        str(arg) for arg in job.args
-            ]
-            db_job.time_started = datetime.datetime.now()
-            db_job.kwargs = json.dumps(job.kwargs)
-            #db_job.parent_job_id = parent_id
-            session.add(db_job)
-            session.commit()                
-        except Exception as ex:
-            logger.error('При сохранении информации о задачи ' +
-                f'возникла ошибка {ex}')
-        finally:
-            session.close()
         
     @staticmethod
     async def create_child_jobs_async(
@@ -157,27 +132,6 @@ class JobHelper:
             except Exception as ex:
                 logger.error('При обновлении задачи ' +
                 f'возникла ошибка {ex}')
-
-    @staticmethod
-    def complete_job(
-        id: str,
-        exception: Any = None
-    ):
-        "Завершение задачи"
-        session = sync_session()
-        try:
-            db_job: PersistanceJob = \
-                session.get(PersistanceJob, id)
-            if db_job:
-                db_job.set_complete_date()
-                if exception:
-                    db_job.exception_text = str(exception)
-            session.commit()
-        except Exception as ex:
-            logger.error('При обновлении задачи ' +
-                f'возникла ошибка {ex}')
-        finally:
-            session.close()
 
     @staticmethod
     def get_prepared_job(
