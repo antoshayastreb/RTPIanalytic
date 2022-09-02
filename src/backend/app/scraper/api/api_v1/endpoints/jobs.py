@@ -90,7 +90,7 @@ async def get_job_extended_info(
 #         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
 #         detail=f"При удалени задачи возникла ошибка {str(ex)}")
 
-@router.get("/update_all", response_model=JobOut)
+@router.get("/update_all", dependencies=[Depends(scheduler_service.update_all_job_check)], response_model=JobOut)
 async def update_all_tables(
     fetch_all: bool = False,
     scheduler: BaseScheduler = Depends(scheduler_service.get_scheduler),
@@ -102,7 +102,7 @@ async def update_all_tables(
         scheduler.add_job(
             update_all_wraper,
             id = id,
-            name = f'Oбновление всех таблиц {"полное" if fetch_all else "с последней даты"}',
+            name = 'update_all',
             args=[fetch_all, id]
         )
         return job_crud.get(session, id)
@@ -111,7 +111,7 @@ async def update_all_tables(
         detail=f"Возникла ошибка: {str(ex)}")
     
 
-@router.get("/update/{table}", response_model=JobOut)
+@router.get("/update/{table}", dependencies=[Depends(scheduler_service.update_job_check)], response_model=JobOut)
 async def update_table_job(
     table: str,
     fetch_all: bool = False,
@@ -124,7 +124,7 @@ async def update_table_job(
         scheduler.add_job(
             update_wraper,
             id=id, 
-            name=f"Обновление {table}", 
+            name=f"update_{table}", 
             args=[table, id, fetch_all]
         )
         return job_crud.get(session, id)
@@ -151,7 +151,7 @@ async def test_for_coroutine(
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
         detail=f"Возникла ошибка: {str(ex)}")
 
-@router.get("/clean_up_jobs", response_model=JobOut)
+@router.get("/clean_up_jobs", dependencies=[Depends(scheduler_service.jobs_cleanup_check)], response_model=JobOut)
 async def clean_up_jobs(
     scheduler: BaseScheduler = Depends(scheduler_service.get_scheduler),
     session: Session = Depends(get_sync_session)    
@@ -161,7 +161,7 @@ async def clean_up_jobs(
         id = str(uuid.uuid4())
         scheduler.add_job(
             jobs_clean_up,
-            name="Очистка задач",
+            name="clean_up_jobs",
             id=id,
             misfire_grace_time=None
         )

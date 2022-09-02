@@ -133,7 +133,6 @@ class Updater:
         `scheduler` - шедулер
         """
         try:
-            #print(f'Обновление {table_name} {current_thread().getName()}')
             url= Updater.request_builder(table_name, filter)
             global count
             async with ScraperSession(timeout=get_count_timeout) as client:
@@ -151,7 +150,6 @@ class Updater:
     ) -> None:
         """Основной метод получения данных с API ресурса"""
         range = ranges.pop()
-        #print(f'{range} для {self.table_name} {current_thread().getName()}')
         header = {
             'Range' : range
         }
@@ -174,7 +172,6 @@ class Updater:
                 await asyncio.sleep(delay)
                 session = sync_session()
                 scheduler = scheduler_service.get_scheduler()
-                #id = JobHelper.get_prepared_job(parent_id, session, scheduler)
                 id = job_crud.get_prepared_job(session, parent_id, scheduler)
                 scheduler.add_job(
                     self.get_content_wraper,
@@ -373,10 +370,9 @@ class Updater:
             jobs_amount = sum(len(x) for x in range_list)
             JobHelper.create_child_jobs(parent_id, jobs_amount)
             session = sync_session()
-            #db_parent_job = JobHelper.get_job_by_id(parent_id, session)
             db_parent_job = job_crud.get(session, parent_id)
             if not db_parent_job:
-                raise ValueError('В базе отсутсвует основная задача, ' + 
+                raise Exception('В базе отсутсвует основная задача, ' + 
                 'невозможно получить дочерние')
             for idx, ranges in enumerate(range_list):
                 if len(ranges) > 0:
@@ -388,6 +384,9 @@ class Updater:
                         misfire_grace_time=None,
                         args=[ranges, parent_id, 0]
                     )
+            while not db_parent_job.time_completed:
+                time.sleep(10)
+                session.refresh(db_parent_job)
         except Exception as ex:
             raise ex
         finally: 
@@ -412,9 +411,11 @@ async def update_table(
         updater.url = Updater.request_builder(table_name, filter)
         updater.produce_jobs(count, self_id)
     except AssertionError as ex:
-        logger.error(f"При обновлении таблицы {table_name} не удалось получить кол-во строк")
+        #logger.error(f"При обновлении таблицы {table_name} не удалось получить кол-во строк")
+        raise Exception(f"При обновлении таблицы {table_name} не удалось получить кол-во строк")
     except Exception as ex:
-        logger.error(f"При обновлении таблицы {table_name} произошла ошибка {ex}")
+        #logger.error(f"При обновлении таблицы {table_name} произошла ошибка {ex}")
+        raise ex
 
 async def update_all(
     fetch_all: bool,
@@ -425,20 +426,22 @@ async def update_all(
         scheduler = scheduler_service.get_scheduler()
         await JobHelper.create_child_jobs_async(parent_id, len(tables))
         session = sync_session()
-        #db_parent_job = JobHelper.get_job_by_id(parent_id, session)
         db_parent_job = job_crud.get(session, parent_id)
         if not db_parent_job:
-                raise ValueError('В базе отсутсвует основная задача, ' + 
+                raise Exception('В базе отсутсвует основная задача, ' + 
                 'невозможно получить дочерние')
         for idx, table in enumerate(tables):
             child_job_id = db_parent_job.child_jobs[idx].id
             scheduler.add_job(
                 update_wraper,
                 id=child_job_id,
-                name=f'Обновление {table}',
+                name=f'update_{table}',
                 misfire_grace_time=None,
                 args=[table, child_job_id, fetch_all]
             )
+        while not db_parent_job.time_completed:
+            await asyncio.sleep(10)
+            session.refresh(db_parent_job)
     except Exception as ex:
         logger.error('При обновлении всех таблиц ' +
         f'произошла ошибка {ex}')
@@ -461,8 +464,6 @@ async def test_coroutine_job(
         end_time = datetime.datetime.now()
         print(f"Прождали {end_time-start_time} сек, начали {start_time}, закончили {end_time}")
     except Exception as ex:
-        # logger.error('В тестовой задаче произошла ошибка ' +
-        # f'{ex}')
         raise ex
     finally:
         if len(args_list) > 0:
@@ -476,14 +477,6 @@ async def test_coroutine_job(
                 misfire_grace_time=None,
                 args=[args_list, delay, parent_id]                
             )
-            #id = JobHelper.get_prepared_job(parent_id, session, scheduler)
-            # id = job_crud.get_prepared_job(session, parent_id, scheduler)
-            # scheduler.add_job(
-            #     test_job_wrapper,
-            #     id=id,
-            #     misfire_grace_time=None,
-            #     args=[args_list, delay, parent_id]
-            # )
         session.close()
 
 def update_all_wraper(*args):
@@ -504,10 +497,9 @@ def test_job_main(
         JobHelper.create_child_jobs(parent_id, len(main_args_list))
         splited_list = JobHelper.split_list(main_args_list, max)
         scheduler = scheduler_service.get_scheduler()
-        #db_parent_job = JobHelper.get_job_by_id(parent_id, session)
         db_parent_job = job_crud.get(session, parent_id)
         if not db_parent_job:
-            raise ValueError('В базе отсутсвует основная задача, ' + 
+            raise Exception('В базе отсутсвует основная задача, ' + 
             'невозможно получить дочерние')
         for idx, inner_list in enumerate(splited_list):
             child_job_id = db_parent_job.child_jobs[idx].id
@@ -521,8 +513,6 @@ def test_job_main(
             time.sleep(10)
             session.refresh(db_parent_job)
     except Exception as ex:
-        # logger.error('Произошла ошибка в главной тестовой задаче ' +
-        # f'{ex}')
         raise ex
     finally:
         session.close()
@@ -537,7 +527,6 @@ def test_job_wrapper(
 def jobs_clean_up():
     """Удаление старых, застывших, пустых задач"""
     try:
-        #complete_job_deletion = int(settings.DELETE_COMPLETE_JOB_AFTER)
         session = sync_session()
         job_list = []
         job_list.extend(job_crud.get_empty_jobs(session))

@@ -21,7 +21,6 @@ import logging
 from scraper.db.session import sync_session
 from scraper.utils.exeptions.scheduler import SchedulerStopedException, MaxJobInstancesReached
 from scraper.config import settings
-from scraper.crud.jobs import job_crud
 from scraper.models import Job as PersistanceJob
 
 
@@ -30,7 +29,11 @@ logger = logging.getLogger(__name__)
 job_instance_amount = {
     'test_job_main': int(settings.TEST_MAIN_MAX_INSTANCES),
     'update_all': int(settings.UPDATE_MAX_INSTANCES),
-    'update_rtpi_price': int(settings.UPDATE_MAX_INSTANCES)
+    'update_rtpi_price': int(settings.UPDATE_MAX_INSTANCES),
+    'update_rtpi_price_page': int(settings.UPDATE_MAX_INSTANCES),
+    'update_rtpi_product_name': int(settings.UPDATE_MAX_INSTANCES),
+    'update_rtpi_store_id': int(settings.UPDATE_MAX_INSTANCES),
+    'clean_up_jobs': int(settings.CLEANUP_MAX_INSTANCES)
 }
 
 jobstores = {
@@ -152,6 +155,15 @@ class SchedulerService(object):
 
     def test_job_check(self) -> None:
         self.__job_already_running_check('test_job_main')
+
+    def update_all_job_check(self) -> None:
+        self.__job_already_running_check('update_all')
+
+    def update_job_check(self, table: str) -> None:
+        self.__job_already_running_check(f"update_{table}")
+
+    def jobs_cleanup_check(self) -> None:
+        self.__job_already_running_check('clean_up_jobs')
 
     def __job_already_running_check(self, job_name: str) -> None:
         if job_name not in job_instance_amount.keys():

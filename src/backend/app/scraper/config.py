@@ -60,6 +60,7 @@ class Settings(BaseSettings):
     #запущено
     MAX_CONCURENT_JOBS: str = '2'
     UPDATE_MAX_INSTANCES: str = '1'
+    CLEANUP_MAX_INSTANCES: str = '1'
     TEST_MAIN_MAX_INSTANCES: str = '1'
     COALESCE: str = 'True'
     #MAX_WORKERS: str = '4'
