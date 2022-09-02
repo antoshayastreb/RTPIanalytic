@@ -4,7 +4,7 @@ from dotenv import load_dotenv
 load_dotenv()
 
 class Settings(BaseSettings):
-    VERSION: str = "0.1.5"
+    VERSION: str = "0.1.6"
     #Стандартные эндпоинты
     API_V1_STR: str = "/api/v1"
     DOCS_URL: str = "/api/docs"
