@@ -56,6 +56,9 @@ class Settings(BaseSettings):
     CLIENT_RETRY_ATTEMPTS: str = '3'
     #Настройки для APScheduler
     JOBSTORE_TABLE: str = 'job_store'
+    #Настройка HTTP Basic Auth
+    AUTH_USERNAME: str = 'admin'
+    AUTH_PASSWORD: str = 'adminpassword'
     #Настройка, регулирующая сколько одновременных задач будет
     #запущено
     MAX_CONCURENT_JOBS: str = '2'
