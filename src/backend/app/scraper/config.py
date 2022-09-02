@@ -1,25 +1,3 @@
-# import os
-# from dotenv import load_dotenv
-
-# #Базовые параметры
-# base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-
-# load_dotenv(os.path.join(base_dir, '.env'))
-
-# #Настраиваемые параметры
-
-# #Развертывание
-# status = os.getenv('STATUS', 'DEBUG')
-
-# #Токен API
-# rtpi_api_token = os.getenv('RTPI_API_TOKEN')
-
-# #Базовый адрес запросов
-# rtpi_api_url = os.getenv('RTPI_API_URL')
-
-# #Адрес подключения базы данных
-# database_url = os.getenv('DATABASE_URL') 
-
 from typing import Optional, Dict, Any
 from pydantic import BaseSettings, PostgresDsn, validator
 from dotenv import load_dotenv
@@ -77,9 +55,12 @@ class Settings(BaseSettings):
     CLIENT_TIMEOUT_GET_CONTENT: str = '180'
     CLIENT_RETRY_ATTEMPTS: str = '3'
     #Настройки для APScheduler
+    JOBSTORE_TABLE: str = 'job_store'
     #Настройка, регулирующая сколько одновременных задач будет
     #запущено
     MAX_CONCURENT_JOBS: str = '2'
+    UPDATE_MAX_INSTANCES: str = '1'
+    TEST_MAIN_MAX_INSTANCES: str = '1'
     COALESCE: str = 'True'
     #MAX_WORKERS: str = '4'
     TABLE_LIMIT: str = '100000'

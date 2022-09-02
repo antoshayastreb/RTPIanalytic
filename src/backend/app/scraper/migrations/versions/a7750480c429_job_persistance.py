@@ -21,7 +21,6 @@ def upgrade() -> None:
     op.create_table('job',
     sa.Column('id', sa.String(length=191), nullable=False),
     sa.Column('name', sa.String(), nullable=True),
-    sa.Column('func', sa.String(), nullable=True),
     sa.Column('args', postgresql.ARRAY(sa.String()), nullable=True),
     sa.Column('kwargs', postgresql.JSON(astext_type=sa.Text()), nullable=True),
     sa.Column('time_started', sa.DateTime(), nullable=True),

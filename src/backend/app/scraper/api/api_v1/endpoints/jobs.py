@@ -3,7 +3,7 @@ from apscheduler.executors.pool import ThreadPoolExecutor
 from fastapi import APIRouter, Depends, HTTPException, status
 from apscheduler.schedulers.base import BaseScheduler
 from apscheduler.job import Job as APSJob
-from typing import List
+from typing import List, Optional
 from sqlalchemy.orm import Session
 
 from scraper.utils.services.scheduler_service import scheduler_service
@@ -132,7 +132,7 @@ async def update_table_job(
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
         detail=f"Возникла ошибка: {str(ex)}")
 
-@router.get("/test_coroutine", response_model=JobOut)
+@router.get("/test_coroutine", response_model=JobOut, dependencies=[Depends(scheduler_service.test_job_check)])
 async def test_for_coroutine(
     scheduler: BaseScheduler = Depends(scheduler_service.get_scheduler),
     session: Session = Depends(get_sync_session)
@@ -142,6 +142,7 @@ async def test_for_coroutine(
         scheduler.add_job(
             test_job_main,
             id=id,
+            name='test_job_main',
             misfire_grace_time=None,
             args=[id]
         )

@@ -19,13 +19,19 @@ import json
 import logging
 
 from scraper.db.session import sync_session
-from scraper.utils.exeptions.scheduler import SchedulerStopedException
+from scraper.utils.exeptions.scheduler import SchedulerStopedException, MaxJobInstancesReached
 from scraper.config import settings
 from scraper.crud.jobs import job_crud
 from scraper.models import Job as PersistanceJob
 
 
 logger = logging.getLogger(__name__)
+
+job_instance_amount = {
+    'test_job_main': int(settings.TEST_MAIN_MAX_INSTANCES),
+    'update_all': int(settings.UPDATE_MAX_INSTANCES),
+    'update_rtpi_price': int(settings.UPDATE_MAX_INSTANCES)
+}
 
 jobstores = {
     'default': SQLAlchemyJobStore(url=settings.SQLALCHEMY_DATABASE_URI)
@@ -39,10 +45,6 @@ executors = {
 job_defaults = {
     'coalesce': settings.COALESCE.lower() == 'true'
     #'max_instances': 1
-}
-
-job_max_amount = {
-    
 }
 
 def on_scheduler_start(event: SchedulerEvent):
@@ -65,7 +67,7 @@ def on_job_added(event: JobExecutionEvent):
 
 class SchedulerService(object):
     def __init__(self) -> None:
-        #self.currently_executing: List[str] = []
+        self.currently_executing: List[str] = []
         self.number = randint(0, 10)
         self.scheduler: BaseScheduler = BackgroundScheduler(
             jobstores=jobstores,
@@ -85,12 +87,11 @@ class SchedulerService(object):
         return self.scheduler
     
     def get_currently_executing_jobs(self) -> None:
-        #return self.currently_executing
-        pass
+        return self.currently_executing
 
     def add_to_currently_executing(self, job: PersistanceJob) -> None:
-        #self.currently_executing.append(job.func)
-        pass
+        #self.__job_already_running_check(job.name)
+        self.currently_executing.append(job.name)
     
     def start_job(
         self,
@@ -102,17 +103,16 @@ class SchedulerService(object):
             db_job: PersistanceJob = session.get(PersistanceJob, job.id)
             if not db_job:
                 db_job = PersistanceJob(id = job.id)
-            db_job.func = str(job.func_ref)
+            #db_job.func = str(job.func_ref)
             db_job.name = job.name
             db_job.args = [
                         str(arg) for arg in job.args
             ]
             db_job.time_started = datetime.now()
             db_job.kwargs = json.dumps(job.kwargs)
-            #db_job.parent_job_id = parent_id
             session.add(db_job)
             session.commit()
-            #self.add_to_currently_executing(db_job)               
+            self.add_to_currently_executing(db_job)               
         except Exception as ex:
             logger.error('При сохранении информации о задачи ' +
                 f'возникла ошибка {ex}')
@@ -134,28 +134,32 @@ class SchedulerService(object):
                 if exception:
                     db_job.exception_text = str(exception)
             session.commit()
-            #scheduler_service.remove_from_currently_executing(db_job)
+            session.refresh(db_job)
+            self.remove_from_currently_executing(db_job)
         except Exception as ex:
             logger.error('При обновлении задачи ' +
                 f'возникла ошибка {ex}')
         finally:
             session.close()
 
-    def remove_from_currently_executing(self, db_job: PersistanceJob) -> None:
-        # if db_job.func in self.currently_executing:
-        #     self.currently_executing.remove(db_job.func)
-        #     if db_job.parent_job and db_job.parent_job.time_completed:
-        #         self.remove_from_currently_executing(db_job.parent_job)
-        pass
+    def remove_from_currently_executing(self, job: PersistanceJob) -> None:
+        if job.name in self.currently_executing:
+            self.currently_executing.remove(job.name)
 
     def scheduler_running_check(self) -> None:
         if not self.scheduler.running:
             raise SchedulerStopedException
 
-    def job_already_running_check(self, job) -> None:
-        pass
+    def test_job_check(self) -> None:
+        self.__job_already_running_check('test_job_main')
+
+    def __job_already_running_check(self, job_name: str) -> None:
+        if job_name not in job_instance_amount.keys():
+            return
+        max_for_job = job_instance_amount[job_name]
+        already_in = self.currently_executing.count(job_name)
+        if already_in >= max_for_job:
+            raise MaxJobInstancesReached(job_name, already_in, max_for_job)
+
 
 scheduler_service = SchedulerService()
-
-# def get_scheduler(request: Request) -> AsyncIOScheduler:
-#     return request.app.state.scheduler_service

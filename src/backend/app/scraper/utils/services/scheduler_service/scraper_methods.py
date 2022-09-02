@@ -1,8 +1,6 @@
-from ast import stmt
+import time
 import asyncio
 import datetime
-from operator import rshift
-from unittest import result
 import uuid
 from dateutil import parser
 from aiohttp import ClientTimeout
@@ -519,6 +517,9 @@ def test_job_main(
                 args=[inner_list, 0, parent_id],
                 misfire_grace_time=None
             )
+        while not db_parent_job.time_completed:
+            time.sleep(10)
+            session.refresh(db_parent_job)
     except Exception as ex:
         # logger.error('Произошла ошибка в главной тестовой задаче ' +
         # f'{ex}')

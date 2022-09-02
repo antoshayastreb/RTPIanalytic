@@ -19,7 +19,7 @@ class Job(Base):
     """Класс для хранения в базе информации о задачах"""
     id = Column(String(191), primary_key=True, index=True)
     name = Column(String)
-    func = Column(String)
+    #func = Column(String)
     args = Column(ARRAY(String))
     kwargs = Column(JSON)
     time_started = Column(DateTime)

@@ -140,21 +140,6 @@ class JobHelper:
         scheduler: BaseScheduler = None
     ):
         """Получить дочернюю задачу, чьё выполнение ещё не началось"""
-        # try:
-        #     db_job: PersistanceJob = session.query(PersistanceJob).filter_by(
-        #         parent_job_id = parent_id, time_started = None
-        #     ).first()
-        #     if not db_job:
-        #         raise ValueError('Не удается получить дочернюю задачу')
-        #     job = scheduler.get_job(db_job.id)
-        #     #Проверка на дублирующийся id
-        #     if job:
-        #         return JobHelper.get_prepared_job(parent_id, session, scheduler)
-        #     return db_job.id
-        # except Exception as ex:
-        #     logger.error('При получении "подготовленной задачи" ' +
-        #     f'произошла ошибка {ex}')
-        #     return None
         db_job: PersistanceJob = session.query(PersistanceJob).filter_by(
             parent_job_id = parent_id, time_started = None
         ).first()
