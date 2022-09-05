@@ -55,7 +55,7 @@ class JobCrud(CRUDBase[PersistanceJob, JobCreate, JobUpdate]):
     ) -> List[PersistanceJob]:
         """Получить пустые задачи"""
         return session.query(self.model).filter_by(
-            name = None, time_started = None, func = None,
+            name = None, time_started = None,
             time_completed = None, args = None
         ).all()
 

@@ -34,6 +34,16 @@ class JobCreateDeleteResponse(JobBase):
     """Класс для создания/удаления задачи"""
     scheduled: bool
 
+class JobScheduledResponse(JobBase):
+    """Ответ на создание задачи"""
+    next_run_time: datetime
+
+    class Config:
+        json_encoders = {
+            #Перевод даты в строку
+            datetime: SerializerHelper.convert_datetime_to_iso_8601 
+        }
+
 class JobOut(JobBase):
     """Базовая информация о задаче"""
     func: Optional[str]

@@ -60,58 +60,60 @@ async def resume_scheduler(
         raise HTTPException(status_code=409,
         detail=f"Не удалось возобновить шедулер: {str(e)}")
 
-@router.post("/shutdown", status_code=200)
-async def shutdown_scheduler(
-    scheduler: BaseScheduler = 
-    Depends(scheduler_service.get_scheduler),
-    run_check = 
-    Depends(scheduler_service.scheduler_running_check),
-    wait: bool = True
-    ):
-    """
-    Остановка шедулера.
+# @router.post("/shutdown", status_code=200)
+# async def shutdown_scheduler(
+#     scheduler: BaseScheduler = 
+#     Depends(scheduler_service.get_scheduler),
+#     run_check = 
+#     Depends(scheduler_service.scheduler_running_check),
+#     wait: bool = True
+#     ):
+#     """
+#     Остановка шедулера.
 
-    :param bool wait: Дождаться завершения задач
-    """
-    try:
-        scheduler.shutdown(wait)
-        return JSONResponse(
-            content={"message": "Шедулер остановлен"}
-        )
-    except Exception as e:
-        logger.error(f"При остановке шедулера возникла ошибка: {e}")
-        raise HTTPException(
-            status_code=409,
-            detail=f"Не удалось остановить шедулер: {e}"
-        )
+#     :param bool wait: Дождаться завершения задач
+#     """
+#     try:
+#         scheduler.shutdown(wait)
+#         return JSONResponse(
+#             content={"message": "Шедулер остановлен"}
+#         )
+#     except Exception as e:
+#         logger.error(f"При остановке шедулера возникла ошибка: {e}")
+#         raise HTTPException(
+#             status_code=409,
+#             detail=f"Не удалось остановить шедулер: {e}"
+#         )
 
-@router.post("/start", status_code=200)
-async def start_scheduler(
-    scheduler: BaseScheduler = 
-    Depends(scheduler_service.get_scheduler),
-    paused: bool = False
-    ):
-    """
-    Старт шедулера.
+# @router.post("/start", status_code=200)
+# async def start_scheduler(
+#     scheduler: BaseScheduler = 
+#     Depends(scheduler_service.get_scheduler),
+#     paused: bool = False
+#     ):
+#     """
+#     Старт шедулера.
 
-    :param bool paused: Запустить шедулер в приостановдленном \
-    состоянии
-    """
-    if scheduler.running:
-        if scheduler.state == STATE_PAUSED:
-            raise ShedulerAlreadyRunningButPaused
-        raise SchedulerAlreadyRunningException
-    try:
-        scheduler.start(paused)
-        return JSONResponse(
-            content={"message": "Шедулер запущен"}
-        )
-    except Exception as e:
-        logger.error(f"При старте шедулера возникла ошибка: {e}")
-        raise HTTPException(
-            status_code=409,
-            detail=f"Не удалось запустить шедулер: {e}"
-        )
+#     :param bool paused: Запустить шедулер в приостановдленном \
+#     состоянии
+#     """
+#     if scheduler.running:
+#         if scheduler.state == STATE_PAUSED:
+#             raise ShedulerAlreadyRunningButPaused
+#         raise SchedulerAlreadyRunningException
+#     try:
+#         scheduler_service.__init__()
+#         scheduler = scheduler_service.get_scheduler()
+#         scheduler.start(paused)
+#         return JSONResponse(
+#             content={"message": "Шедулер запущен"}
+#         )
+#     except Exception as e:
+#         logger.error(f"При старте шедулера возникла ошибка: {e}")
+#         raise HTTPException(
+#             status_code=409,
+#             detail=f"Не удалось запустить шедулер: {e}"
+#         )
 
 @router.get("/health_check", status_code=200)
 async def check_scheduler_state(

@@ -3,17 +3,25 @@ from apscheduler.executors.pool import ThreadPoolExecutor
 from fastapi import APIRouter, Depends, HTTPException, status
 from apscheduler.schedulers.base import BaseScheduler
 from apscheduler.job import Job as APSJob
-from typing import List, Optional
+from typing import List, Optional, Any, Union
 from sqlalchemy.orm import Session
 
 from scraper.utils.services.scheduler_service import scheduler_service
-from scraper.schemas.job import (
-    CurrentScheduledJobsResponse,
-    CurrentScheduledJob,
-    JobCreateDeleteResponse,
-    JobOut,
-    JobOutExtendedInfo
+from scraper.models import (
+    Table
 )
+from scraper.schemas.job import (
+    JobOut,
+    JobOutExtendedInfo,
+    JobScheduledResponse
+)
+
+from scraper.schemas.schedules import (
+    Interval,
+    Date,
+    Cron
+)
+
 from scraper.utils.exeption_handlers.scheduler import (
     JobNotFoundException
 )
@@ -29,11 +37,36 @@ from scraper.utils.help_func import JobHelper
 from scraper.db.session import get_session, get_sync_session
 from scraper.crud.jobs import job_crud
 
+#Dependecies
+
+#Планирование
+async def schedules(
+    interval_schedule: Union[Interval, None] = None,
+    date_schedule: Union[Date, None] = None,
+    cron_schedule: Union[Cron, None] = None
+):
+    """
+    Получить варианты планирования расписания выполнения задач.
+    """
+    return {
+        "interval_schedule": interval_schedule,
+        "date_schedule": date_schedule,
+        "cron_schedule": cron_schedule
+    }
+
 router = APIRouter(
     dependencies=[Depends(scheduler_service.scheduler_running_check)]
 )
 
-@router.get("/{job_id}/basic_info", response_model=JobOut)
+@router.get(
+    "/currently_executing"  
+)
+async def get_currently_executing():
+    """Получить текущие выполняемые задачи"""
+    return scheduler_service.get_currently_executing_jobs
+
+@router.get(
+    "/{job_id}/basic_info", response_model=JobOut)
 async def get_job_basic_info(
     job_id: str,
     session=Depends(get_sync_session)
@@ -90,82 +123,96 @@ async def get_job_extended_info(
 #         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
 #         detail=f"При удалени задачи возникла ошибка {str(ex)}")
 
-@router.get("/update_all", dependencies=[Depends(scheduler_service.update_all_job_check)], response_model=JobOut)
+@router.post(
+    "/update_all", 
+    dependencies=[Depends(scheduler_service.update_all_job_check)], 
+    response_model=JobScheduledResponse
+)
 async def update_all_tables(
     fetch_all: bool = False,
-    scheduler: BaseScheduler = Depends(scheduler_service.get_scheduler),
-    session: Session = Depends(get_sync_session)
+    schedules: dict = Depends(schedules),
 ):
-    """Обновить все таблицы вручную"""
+    """Обновить все таблицы"""
     try:
         id = str(uuid.uuid4())
-        scheduler.add_job(
-            update_all_wraper,
-            id = id,
-            name = 'update_all',
+        job = scheduler_service.add_job(
+            schedules=schedules,
+            func=update_all_wraper,
+            job_id=id,
+            job_name='update_all',
             args=[fetch_all, id]
         )
-        return job_crud.get(session, id)
+        return job
     except Exception as ex:
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
         detail=f"Возникла ошибка: {str(ex)}")
     
 
-@router.get("/update/{table}", dependencies=[Depends(scheduler_service.update_job_check)], response_model=JobOut)
+@router.post(
+    "/update/{table}", 
+    dependencies=[Depends(scheduler_service.update_job_check)], 
+    response_model=JobScheduledResponse
+)
 async def update_table_job(
-    table: str,
+    table: Table,
     fetch_all: bool = False,
-    scheduler: BaseScheduler = Depends(scheduler_service.get_scheduler),
-    session: Session = Depends(get_sync_session)
+    schedules: dict = Depends(schedules),
 ):
     """Обновить указанную таблицу"""
     try:
         id = str(uuid.uuid4())
-        scheduler.add_job(
-            update_wraper,
-            id=id, 
-            name=f"update_{table}", 
+        job = scheduler_service.add_job(
+            schedules=schedules,
+            func=update_wraper,
+            job_id=id,
+            job_name=f'update_{table}',
             args=[table, id, fetch_all]
         )
-        return job_crud.get(session, id)
+        return job
     except Exception as ex:
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
         detail=f"Возникла ошибка: {str(ex)}")
 
-@router.get("/test_coroutine", response_model=JobOut, dependencies=[Depends(scheduler_service.test_job_check)])
+@router.post(
+    "/test_coroutine", 
+    dependencies=[Depends(scheduler_service.test_job_check)],
+    response_model=JobScheduledResponse
+)
 async def test_for_coroutine(
-    scheduler: BaseScheduler = Depends(scheduler_service.get_scheduler),
-    session: Session = Depends(get_sync_session)
+    schedules: dict = Depends(schedules),
 ):
     try:
         id = str(uuid.uuid4())
-        scheduler.add_job(
-            test_job_main,
-            id=id,
-            name='test_job_main',
-            misfire_grace_time=None,
+        job = scheduler_service.add_job(
+            schedules=schedules,
+            func=test_job_main,
+            job_id=id,
+            job_name='test_job_main',
             args=[id]
         )
-        return job_crud.get(session, id)
+        return job
     except Exception as ex:
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
         detail=f"Возникла ошибка: {str(ex)}")
 
-@router.get("/clean_up_jobs", dependencies=[Depends(scheduler_service.jobs_cleanup_check)], response_model=JobOut)
+@router.post(
+    "/clean_up_jobs",
+    response_model=JobScheduledResponse, 
+    dependencies=[Depends(scheduler_service.jobs_cleanup_check)]
+)
 async def clean_up_jobs(
-    scheduler: BaseScheduler = Depends(scheduler_service.get_scheduler),
-    session: Session = Depends(get_sync_session)    
+    schedules: dict = Depends(schedules),   
 ):
     """Удалить застывшие задачи"""
     try:
         id = str(uuid.uuid4())
-        scheduler.add_job(
-            jobs_clean_up,
-            name="clean_up_jobs",
-            id=id,
-            misfire_grace_time=None
+        job = scheduler_service.add_job(
+            schedules=schedules,
+            func=jobs_clean_up,
+            job_id=id,
+            job_name='clean_up_jobs',
         )
-        return job_crud.get(session, id)
+        return job
     except Exception as ex:
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
         detail=f"Возникла ошибка: {str(ex)}")

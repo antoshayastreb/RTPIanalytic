@@ -5,3 +5,7 @@ from shared.models import (
     RtpiStoreId
 )
 from .job import Job
+
+from .enums import (
+    Table
+)
