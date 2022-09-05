@@ -9,13 +9,21 @@ from sqlalchemy import (
 
 from shared.db.base_class import Base
 
-class RtpiProductName(Base):
+class NU_RtpiProductName(Base):
+    """Таблица rtpiproductname без проверки уникальности"""
     id = Column(Integer, primary_key=True, index=True)
     web_price_id = Column(BigInteger, index=True)
     product_name = Column(Text)
     contributor_id = Column(Integer)
     moment = Column(DateTime)
 
+
+class RtpiProductName(Base):
+    id = Column(Integer, primary_key=True, index=True)
+    web_price_id = Column(BigInteger, index=True)
+    product_name = Column(Text)
+    contributor_id = Column(Integer)
+    moment = Column(DateTime)
     # __ts_vector__ = Column(TSVector(),
     #                           Computed("to_tsvector('russian', product_name || '')",
     #                                       persisted=True))
