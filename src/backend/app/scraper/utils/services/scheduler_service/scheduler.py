@@ -50,8 +50,8 @@ executors = {
 }
 
 job_defaults = {
-    'coalesce': settings.COALESCE.lower() == 'true'
-    #'max_instances': 1
+    'coalesce': settings.COALESCE.lower() == 'true',
+    'max_instances': 10
 }
 
 def on_scheduler_start(event: SchedulerEvent):

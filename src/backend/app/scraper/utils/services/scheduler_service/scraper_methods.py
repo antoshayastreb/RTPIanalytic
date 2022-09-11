@@ -1,7 +1,7 @@
 import time
 import asyncio
 import datetime
-import uuid
+from enum import Enum
 from dateutil import parser
 from aiohttp import ClientTimeout
 import logging
@@ -44,6 +44,10 @@ date_attributes = [
     'date_add'
 ]
 
+class Ordering(Enum):
+    ASCENDING = '.asc'
+    DESCENDING = '.desc'
+
 #Таймаут для метода получения кол-ва строк в таблице
 get_count_timeout = ClientTimeout(total=int(settings.CLIENT_TIMEOUT_GET_COUNT))
 
@@ -53,8 +57,12 @@ get_content_timeout = ClientTimeout(total=int(settings.CLIENT_TIMEOUT_GET_CONTEN
 logger = logging.getLogger(__name__)
 
 class Updater:
-    def __init__(self, table_name: str, limit: str = None) -> None:
+    def __init__(self, table_name: str, nu: bool = False, limit: str = None) -> None:
+        #Запись в 'неуникальные' таблицы
+        self.nu = nu
         self.table_name = table_name
+        self.table_name_disp = f'nu_{table_name}' if nu \
+            else table_name
         self.limit = int(limit) if limit \
             else int(copy.copy(settings.TABLE_LIMIT))
 
@@ -74,6 +82,28 @@ class Updater:
             if self.table_name == 'rtpi_price':
                 return f'date_observe=gte.{value}'
         return None
+
+    def get_order_filter(self, 
+        value: str = None, 
+        order: Ordering = Ordering.ASCENDING) -> 'str | None':
+        """
+        Получить фильтр сортировки.
+
+        Фильтр строится на основе наименования таблицы, но также
+        можно использовать `value` для задания поля фильтрации.
+
+        `order` используется для задания фильтрации, по умолчанию `asc`.
+        """
+        if value:
+            return f'order={value}{order.value}'
+        if self.table_name in [
+            'rtpi_price',
+            'rtpi_price_page',
+            'rtpi_product_name'
+            ]:
+            return f'order=web_price_id{order.value}'
+        return None
+        
 
     def get_last_date(self) -> 'str | None':
         """Получить последнюю дату из таблицы"""
@@ -144,42 +174,65 @@ class Updater:
 
     async def get_content(
         self,  
-        ranges: List[str],
+        ranges: 'list[int]',
         parent_id: str,
-        delay: int = 0
+        #delay: int = 0
     ) -> None:
         """Основной метод получения данных с API ресурса"""
-        range = ranges.pop()
-        header = {
-            'Range' : range
-        }
+        _range = ranges.pop(0)
+        session = sync_session()
+        # header = {
+        #     'Range' : range
+        # }
         try:
+            url = self.request_builder(self.table_name, 
+                f'{self.filter}&limit={self.limit}&offset={_range}') if self.filter \
+                    else self.request_builder(self.table_name, 
+                f'limit={self.limit}&offset={_range}')
             global content
             async with ScraperSession(timeout=get_content_timeout) as client:
                 content = await client.get_json(
-                    headers=header,
-                    url=self.url
+                    #headers=header,
+                    url=url
                 )
             if content:
+                if not isinstance(content, list):
+                    raise ValueError(content)
                 await self.asyncpg_insert(content)
                 #await self.write_to_base(content)
         except Exception as ex:
-            logger.error(f"Произошла ошибка при получении данных для таблицы {self.table_name} \
-                в диапазоне {range}: {ex}")
+            logger.error(f"Произошла ошибка при получении данных для таблицы {self.table_name_disp} \
+                в диапазоне {_range}: {ex}")
             raise ex
         finally:
-            if len(ranges) > 0:
-                await asyncio.sleep(delay)
-                session = sync_session()
+            if ranges:
                 scheduler = scheduler_service.get_scheduler()
                 id = job_crud.get_prepared_job(session, parent_id, scheduler)
-                scheduler.add_job(
-                    self.get_content_wraper,
-                    id = id,
-                    name=f'{self.table_name} {ranges[-1]}',
-                    misfire_grace_time=None,
-                    args=[ranges, 5, parent_id]
-                )
+                try:
+                    scheduler.add_job(
+                        self.get_content_wraper,
+                        id = id,
+                        name=f'{self.table_name_disp} {ranges[0]}',
+                        misfire_grace_time=None,
+                        args=[ranges, parent_id]
+                    )
+                except Exception as ex:
+                    logger.error(f"Произошла ошибка при назначении следующей задачи для таблицы {self.table_name_disp} \
+                        : {ex}")
+                    raise ex
+            session.close()         
+            # if len(ranges) > 0:
+            #     #await asyncio.sleep(delay)
+            #     session = sync_session()
+            #     scheduler = scheduler_service.get_scheduler()
+            #     id = job_crud.get_prepared_job(session, parent_id, scheduler)
+            #     scheduler.add_job(
+            #         self.get_content_wraper,
+            #         id = id,
+            #         name=f'{self.table_name_disp} {ranges[-1]}',
+            #         misfire_grace_time=None,
+            #         args=[ranges, parent_id]
+            #     )
 
 
     def get_stmt(self, content: Any):
@@ -242,13 +295,29 @@ class Updater:
         conn: asyncpg.connection.Connection \
             = await asyncpg.connect(dsn=settings.SQLALCHEMY_DATABASE_URI)
         try:
-            stmt = Updater.make_sql(self.table_name)
+            stmt = Updater.make_sql_nu(self.table_name) if self.nu else \
+                Updater.make_sql(self.table_name)
             await conn.executemany(
-                stmt,
+                stmt, 
                 values
             )
         except Exception as ex:
             logger.error(f"Ошибка при комите: {ex}")
+            raise ex
+        finally:
+            await conn.close()
+
+    async def clear_table(self):
+        """Очистить таблицу"""
+        conn: asyncpg.connection.Connection \
+            = await asyncpg.connect(dsn=settings.SQLALCHEMY_DATABASE_URI)
+        try:
+            
+            stmt = f'''truncate nu_{self.table_name.replace('_', '')};'''
+            await conn.execute(stmt)
+        except Exception as ex:
+            logger.error(f"Ошибка при очистке nu_{self.table_name}: {ex}")
+            raise ex
         finally:
             await conn.close()
 
@@ -271,16 +340,33 @@ class Updater:
         if table_name == "rtpi_product_name":
             sql = '''INSERT INTO rtpiproductname (web_price_id, product_name, contributor_id, moment) \
             VALUES ($1,$2,$3,to_timestamp($4, 'YYYY-MM-DD T HH24:MI:SS:MS')) \
-            ON CONFLICT \
+            ON CONFLICT ON CONSTRAINT web_price_id_product_name_unique\
             DO NOTHING;'''
             return sql   
         if table_name == "rtpi_price":
             sql = '''INSERT INTO rtpiprice (web_price_id, date_observe, stock_status, current_price, crossed_price, contributor_id) \
             VALUES ($1,to_timestamp($2, 'YYYY-MM-DD T HH24:MI:SS:MS'),$3,$4,$5,$6) \
             ON CONFLICT ON CONSTRAINT web_price_id_date_observe_unique \
-            DO UPDATE \
-            SET (stock_status, current_price, crossed_price, contributor_id) \
-            = (excluded.stock_status, excluded.current_price, excluded.crossed_price, excluded.contributor_id);'''
+            DO NOTHING;'''
+            return sql
+
+    @staticmethod
+    def make_sql_nu(table_name: str):
+        if table_name == "rtpi_store_id":
+            sql = '''INSERT INTO nu_rtpistoreid (store_id, store_name) \
+            VALUES ($1,$2); '''
+            return sql
+        if table_name == "rtpi_price_page":
+            sql = '''INSERT INTO nu_rtpipricepage (web_price_id, price_name, price_url, date_add, date_last_crawl, date_last_in_stock, rosstat_id, contributor_id, store_id, city_code) \
+            VALUES ($1,$2,$3,to_timestamp($4, 'YYYY-MM-DD T HH24:MI:SS:MS'),to_timestamp($5, 'YYYY-MM-DD T HH24:MI:SS:MS'),to_timestamp($6, 'YYYY-MM-DD T HH24:MI:SS:MS'),$7,$8,$9,$10); '''
+            return sql
+        if table_name == "rtpi_product_name":
+            sql = '''INSERT INTO nu_rtpiproductname (web_price_id, product_name, contributor_id, moment) \
+            VALUES ($1,$2,$3,to_timestamp($4, 'YYYY-MM-DD T HH24:MI:SS:MS'));'''
+            return sql   
+        if table_name == "rtpi_price":
+            sql = '''INSERT INTO nu_rtpiprice (web_price_id, date_observe, stock_status, current_price, crossed_price, contributor_id) \
+            VALUES ($1,to_timestamp($2, 'YYYY-MM-DD T HH24:MI:SS:MS'),$3,$4,$5,$6);'''
             return sql
 
     async def write_to_base(self, content: Any):
@@ -365,24 +451,24 @@ class Updater:
         try:
             session = None
             scheduler = scheduler_service.get_scheduler()
-            max = int(settings.MAX_CONCURENT_JOBS)
-            range_list = JobHelper.make_range_list(table_count, max)
-            jobs_amount = sum(len(x) for x in range_list)
+            _max = int(settings.MAX_CONCURENT_JOBS)
+            _ranges = JobHelper.make_range_list(table_count, _max)
+            jobs_amount = sum(len(x) for x in _ranges)
             JobHelper.create_child_jobs(parent_id, jobs_amount)
             session = sync_session()
             db_parent_job = job_crud.get(session, parent_id)
             if not db_parent_job:
                 raise Exception('В базе отсутсвует основная задача, ' + 
                 'невозможно получить дочерние')
-            for idx, ranges in enumerate(range_list):
+            for idx, ranges in enumerate(_ranges):
                 if len(ranges) > 0:
                     child_job_id = db_parent_job.child_jobs[idx].id
                     scheduler.add_job(
                         self.get_content_wraper,
                         id=child_job_id,
-                        name=f'{self.table_name} {ranges[0]}',
+                        name=f'{self.table_name_disp} {ranges[0]}',
                         misfire_grace_time=None,
-                        args=[ranges, parent_id, 0]
+                        args=[ranges, parent_id]
                     )
             while not db_parent_job.time_completed:
                 time.sleep(10)
@@ -399,16 +485,23 @@ class Updater:
 async def update_table(
     table_name: str,
     self_id: str,
+    non_unique: bool = False,
     fetch_all: bool = False
 ):
     """Обновить указанную таблицу"""
     try:        
-        updater = Updater(table_name)
-        filter = None if fetch_all else \
+        updater = Updater(table_name, non_unique)
+        order_filter = updater.get_order_filter()
+        update_filter = None if fetch_all or non_unique else \
             updater.make_update_filter(updater.get_last_date())
-        count = await updater.get_table_count(table_name, filter)
+        count = await updater.get_table_count(table_name, update_filter)
         assert count != None
-        updater.url = Updater.request_builder(table_name, filter)
+        if non_unique:
+            await updater.clear_table()
+        #updater.url = Updater.request_builder(table_name, filter)
+        updater.filter = '&'.join([order_filter, update_filter]) \
+            if order_filter and update_filter else \
+                order_filter or update_filter
         updater.produce_jobs(count, self_id)
     except AssertionError as ex:
         #logger.error(f"При обновлении таблицы {table_name} не удалось получить кол-во строк")
@@ -418,6 +511,7 @@ async def update_table(
         raise ex
 
 async def update_all(
+    non_unique: bool,
     fetch_all: bool,
     parent_id: str
 ):
@@ -432,12 +526,14 @@ async def update_all(
                 'невозможно получить дочерние')
         for idx, table in enumerate(tables):
             child_job_id = db_parent_job.child_jobs[idx].id
+            job_name = f'nu_update_{table}' if non_unique else \
+                f'update_{table}'
             scheduler.add_job(
                 update_wraper,
                 id=child_job_id,
-                name=f'update_{table}',
+                name=job_name,
                 misfire_grace_time=None,
-                args=[table, child_job_id, fetch_all]
+                args=[table, child_job_id, non_unique, fetch_all]
             )
         while not db_parent_job.time_completed:
             await asyncio.sleep(10)
@@ -466,18 +562,23 @@ async def test_coroutine_job(
     except Exception as ex:
         raise ex
     finally:
-        if len(args_list) > 0:
-            await asyncio.sleep(delay)
-            scheduler = scheduler_service.get_scheduler()
-            JobHelper.try_to_add_prepared_job(
-                parent_id=parent_id,
-                session=session,
-                scheduler=scheduler,
-                func=test_job_wrapper,
-                misfire_grace_time=None,
-                args=[args_list, delay, parent_id]                
-            )
-        session.close()
+        try:
+            if len(args_list) > 0:
+                await asyncio.sleep(delay)
+                scheduler = scheduler_service.get_scheduler()
+                JobHelper.try_to_add_prepared_job(
+                    parent_id=parent_id,
+                    session=session,
+                    scheduler=scheduler,
+                    func=test_job_wrapper,
+                    misfire_grace_time=None,
+                    args=[args_list, delay, parent_id]                
+                )
+        except Exception as ex:
+            logger.error(f'При попытке создать новую задачу возникла ошибка: {ex}')
+            raise ex
+        finally:
+            session.close()
 
 def update_all_wraper(*args):
     asyncio.run(update_all(*args))

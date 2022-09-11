@@ -140,14 +140,13 @@ async def update_all_tables(
             func=update_all_wraper,
             job_id=id,
             job_name='update_all',
-            args=[fetch_all, id]
+            args=[False, fetch_all, id]
         )
         return job
     except Exception as ex:
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
         detail=f"Возникла ошибка: {str(ex)}")
-    
-
+  
 @router.post(
     "/update/{table}", 
     dependencies=[Depends(scheduler_service.update_job_check)], 
@@ -166,7 +165,7 @@ async def update_table_job(
             func=update_wraper,
             job_id=id,
             job_name=f'update_{table}',
-            args=[table, id, fetch_all]
+            args=[table, id, False, fetch_all]
         )
         return job
     except Exception as ex:
