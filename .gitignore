@@ -10,3 +10,7 @@
 
 #Log files
 *.log
+
+#Misc files
+src/backend/app/scraper/test.py
+src/backend/app/scraper/duplicates.py
