@@ -56,7 +56,7 @@ def upgrade() -> None:
     sa.Column('contributor_id', sa.Integer(), nullable=True),
     sa.Column('moment', sa.DateTime(), nullable=True),
     sa.PrimaryKeyConstraint('id'),
-    sa.UniqueConstraint('web_price_id', 'moment', name='web_price_id_moment_unique')
+    sa.UniqueConstraint('web_price_id', 'product_name', name='web_price_id_product_name_unique')
     )
     op.create_index(op.f('ix_rtpiproductname_id'), 'rtpiproductname', ['id'], unique=False)
     op.create_index(op.f('ix_rtpiproductname_web_price_id'), 'rtpiproductname', ['web_price_id'], unique=False)

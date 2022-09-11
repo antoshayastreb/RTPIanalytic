@@ -9,15 +9,15 @@ from sqlalchemy import (
 
 from shared.db.base_class import Base
 
-class NU_RtpiPrice(Base):
-    """Таблица rtpiprice без проверки уникальности"""
-    id = Column(Integer, primary_key=True, index=True)
-    web_price_id = Column(BigInteger, index=True)
-    date_observe = Column(DateTime)
-    stock_status = Column(Text, index=True)
-    current_price = Column(BigInteger)
-    crossed_price = Column(BigInteger)
-    contributor_id = Column(Integer)
+# class NU_RtpiPrice(Base):
+#     """Таблица rtpiprice без проверки уникальности"""
+#     id = Column(Integer, primary_key=True, index=True)
+#     web_price_id = Column(BigInteger, index=True)
+#     date_observe = Column(DateTime)
+#     stock_status = Column(Text, index=True)
+#     current_price = Column(BigInteger)
+#     crossed_price = Column(BigInteger)
+#     contributor_id = Column(Integer)
 
 class RtpiPrice(Base):
     id = Column(Integer, primary_key=True, index=True)

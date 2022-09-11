@@ -2,11 +2,7 @@ from shared.models import (
     RtpiPrice,
     RtpiPricePage,
     RtpiProductName,
-    RtpiStoreId,
-    NU_RtpiStoreId,
-    NU_RtpiProductName,
-    NU_RtpiPrice,
-    NU_RtpiPricePage
+    RtpiStoreId
 )
 from .job import Job
 
