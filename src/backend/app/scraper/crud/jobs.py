@@ -16,7 +16,8 @@ class JobCrud(CRUDBase[PersistanceJob, JobCreate, JobUpdate]):
     def get_job_extended_info(
         self, session: Session, id: str) -> JobOutExtendedInfo:
         """Получить детальную информацию по задаче"""
-        return session.query(self.model).filter(self.model.id == id).first()
+        return self.get(session, id)
+        #return session.query(self.model).filter(self.model.id == id).first()
 
     def get_prepared_job(
             self,

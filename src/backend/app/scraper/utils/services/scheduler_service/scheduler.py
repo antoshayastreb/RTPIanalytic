@@ -81,7 +81,6 @@ def on_job_submitted(event: JobExecutionEvent):
 class SchedulerService(object):
     def __init__(self) -> None:
         self.currently_executing: List[str] = []
-        self.number = randint(0, 10)
         self.scheduler: BaseScheduler = BackgroundScheduler(
             jobstores=jobstores,
             executors=executors,
@@ -120,10 +119,10 @@ class SchedulerService(object):
                     id = job.id
                 )
             db_job.name = job.name
-            db_job.args = [
-                str(arg) for arg in job.args
-            ]
-            db_job.kwargs = json.dumps(job.kwargs)
+            # db_job.args = [
+            #     str(arg) for arg in job.args
+            # ]
+            # db_job.kwargs = json.dumps(job.kwargs)
             session.add(db_job)
             session.commit()            
         except Exception as ex:

@@ -131,6 +131,7 @@ async def get_job_extended_info(
 async def update_all_tables(
     fetch_all: bool = False,
     schedules: dict = Depends(schedules),
+    hard_filter: str = None
 ):
     """Обновить все таблицы"""
     try:
@@ -140,7 +141,7 @@ async def update_all_tables(
             func=update_all_wraper,
             job_id=id,
             job_name='update_all',
-            args=[False, fetch_all, id]
+            args=[fetch_all, id, hard_filter]
         )
         return job
     except Exception as ex:
@@ -156,6 +157,7 @@ async def update_table_job(
     table: Table,
     fetch_all: bool = False,
     schedules: dict = Depends(schedules),
+    hard_filter: str = None
 ):
     """Обновить указанную таблицу"""
     try:
@@ -165,7 +167,7 @@ async def update_table_job(
             func=update_wraper,
             job_id=id,
             job_name=f'update_{table}',
-            args=[table, id, False, fetch_all]
+            args=[table, id, fetch_all, hard_filter]
         )
         return job
     except Exception as ex:

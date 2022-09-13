@@ -24,7 +24,7 @@ async_session = sessionmaker(
 sync_session = sessionmaker(
     autocommit=False,
     autoflush=False,
-    bind=sync_engine
+    bind=sync_engine,
 )
 
 async def get_session() -> AsyncSession:
