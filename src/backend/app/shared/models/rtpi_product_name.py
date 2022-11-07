@@ -30,5 +30,5 @@ class RtpiProductName(Base):
     __table_args__ = (
         #Index('ix_productname___ts_vector__', __ts_vector__, postgresql_using='gin'),
         #Уникальность по 'web_price_id' и 'moment'
-        UniqueConstraint('web_price_id', 'product_name', name=f'web_price_id_product_name_unique'),
+        UniqueConstraint('web_price_id', 'product_name', 'moment', name=f'web_price_id_product_name_moment_unique'),
     )

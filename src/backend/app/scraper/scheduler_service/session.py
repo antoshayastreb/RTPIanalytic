@@ -1,13 +1,23 @@
-from asyncio.log import logger
-import traceback
-from aiohttp import ClientSession, ClientResponse, ClientTimeout
+from aiohttp import (
+    ClientSession,
+    ClientResponse, 
+    ClientTimeout
+)
 from aiohttp.hdrs import METH_GET
-import logging
-from tenacity import retry, stop_after_attempt, wait_random_exponential, retry_if_not_exception_type
+from scheduler_service.exceptions import Unsuccessful
+from tenacity import (
+    retry, 
+    stop_after_attempt, 
+    wait_random_exponential, 
+    retry_if_not_exception_type
+)
 from typing import Optional
+import logging
 
-from scraper.config import settings
-from scraper.utils.exeptions.scheduler import Unsuccessful
+from .config import settings
+
+client_get_count = ClientTimeout(total = int(settings.CLIENT_TIMEOUT_GET_COUNT))
+client_get_content = ClientTimeout(total = int(settings.CLIENT_TIMEOUT_GET_CONTENT))
 
 base_headers = {
     'Authorization': f'Bearer {settings.RTPI_API_TOKEN}',
@@ -20,9 +30,7 @@ count_headers = {
     'Prefer' : 'count=exact'
 }
 
-#timeout = ClientTimeout(total=int(settings.CLIENT_TIMEOUT))
-
-loger = logging.getLogger(__name__)
+logger = logging.getLogger(__name__)
 
 class ScraperSession(ClientSession):
     def __init__(
@@ -33,10 +41,11 @@ class ScraperSession(ClientSession):
         super().__init__(
             base_url=settings.RTPI_REQUEST_BASEURL,
             headers=base_headers,
+            timeout=client_get_count,
             *args, 
             **kwargs
         )
-    
+
     async def get_count(self, url, **kwargs) -> int:
         try:
             response = None
@@ -68,6 +77,7 @@ class ScraperSession(ClientSession):
                 **kwargs,
             )
         ).json()
+
 
     @retry(
         stop=stop_after_attempt(int(settings.CLIENT_RETRY_ATTEMPTS)),

@@ -2,7 +2,6 @@ import time
 import asyncio
 import datetime
 from enum import Enum
-from dateutil import parser
 from aiohttp import ClientTimeout
 import logging
 import copy
@@ -17,7 +16,7 @@ import asyncpg
 from ...help_func import JobHelper
 from scraper.config import settings
 from scraper.utils.services.scheduler_service import scheduler_service
-from .session import ScraperSession
+#from .session import ScraperSession
 from scraper.models import (
     RtpiPrice,
     RtpiStoreId,
@@ -367,16 +366,16 @@ class Updater:
                 logger.error(f"Ошибка при комите: {ex}")
                 await session.rollback()
         
-    def fit_to_model(self, json_object: str):
-        """Перевести json в модель"""
-        model = tables[self.table_name]
-        obj = model(**json_object)
-        for atr in date_attributes:
-            if hasattr(obj, atr):
-                obj_atr = getattr(obj, atr)
-                if isinstance(obj_atr, str):
-                    setattr(obj, atr, parser.parse(obj_atr))
-        return obj
+    # def fit_to_model(self, json_object: str):
+    #     """Перевести json в модель"""
+    #     model = tables[self.table_name]
+    #     obj = model(**json_object)
+    #     for atr in date_attributes:
+    #         if hasattr(obj, atr):
+    #             obj_atr = getattr(obj, atr)
+    #             if isinstance(obj_atr, str):
+    #                 setattr(obj, atr, parser.parse(obj_atr))
+    #     return obj
 
 
     @staticmethod
@@ -475,21 +474,26 @@ async def update_table(
     """Обновить указанную таблицу"""
     try:        
         updater = Updater(table_name)
+        # Фильтр для сортировки по id
+        # Необходим для вытаскивания уникальных значений
+        # Без него тянет дубли (???)
         order_filter = updater.get_order_filter()
-        update_filter = None if fetch_all else \
+        # Если передан 'hard_filter' игнорируем текущий данные в базе
+        # то есть ситуация равносильная 'fetch_all = False'
+        # иначе тянем последнюю дату по таблице из базы 
+        update_filter = None if fetch_all or hard_filter else \
             updater.make_update_filter(updater.get_last_date())
-        count_filter = updater.make_filter(hard_filter, update_filter)
-        count = await updater.get_table_count(table_name, count_filter)
+        final_filter = updater.make_filter(
+            order_filter,
+            hard_filter,
+            update_filter)
+        count = await updater.get_table_count(table_name, final_filter)
         assert count != None
-        #updater.url = Updater.request_builder(table_name, filter)
+        #updater.url = Updater.request_builder(table_name, filter)a
         # updater.filter = '&'.join([order_filter, update_filter]) \
         #     if order_filter and update_filter else \
         #         order_filter or update_filter
-        updater.filter = updater.make_filter(
-            hard_filter, 
-            update_filter, 
-            order_filter
-        )
+        updater.filter = final_filter
         updater.produce_jobs(count, self_id)
     except AssertionError as ex:
         #logger.error(f"При обновлении таблицы {table_name} не удалось получить кол-во строк")

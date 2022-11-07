@@ -15,3 +15,4 @@
 src/backend/app/scraper/test.py
 src/backend/app/scraper/duplicates.py
 src/backend/app/scraper/import_from_csv.py
+src/backend/app/scraper/test_functions.py

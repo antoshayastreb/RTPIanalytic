@@ -16,7 +16,7 @@ from tenacity import (
 from tenacity.wait import wait_fixed
 
 from scraper.config import settings
-from scraper.models import Job as PersistanceJob
+#from scraper.models import Job as PersistanceJob
 from db.session import async_session, sync_session
 
 logger = logging.getLogger(__name__)

@@ -2,9 +2,9 @@ import logging
 from fastapi import FastAPI
 
 from config import settings
-from scraper.utils.services.scheduler_service import scheduler_service
+from scraper.scheduler_service import scheduler_service
 from api.api_v1.api import api_router
-from utils.exeption_handlers.scheduler import register_scheduler_exceptions_handlers
+from scraper.scheduler_service import register_scheduler_exceptions_handlers
 
 #Инициализация приложения
 app = FastAPI(
@@ -28,7 +28,7 @@ register_scheduler_exceptions_handlers(app)
 @app.on_event("startup")
 async def try_to_load_scheduler():
     """Создает шедулер"""
-    scheduler = scheduler_service.get_scheduler()
+    scheduler = scheduler_service.instance
     #app.state.scheduler_service = scheduler
     try:
         scheduler.start()
@@ -41,7 +41,7 @@ async def try_to_load_scheduler():
 async def try_to_shutdown_scheduler():
     """Завершает шедулер"""
     try:
-        scheduler = scheduler_service.get_scheduler()
+        scheduler = scheduler_service.instance
         scheduler.shutdown(wait=False)
     except:
         pass

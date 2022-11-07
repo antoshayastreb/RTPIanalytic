@@ -4,7 +4,11 @@ from shared.models import (
     RtpiProductName,
     RtpiStoreId
 )
-from .job import Job
+#from .job import Job
+
+from .rtpi_job_data import RtpiJobData
+
+from .rtpi_job_info import RtpiJobInfo
 
 from .enums import (
     Table
