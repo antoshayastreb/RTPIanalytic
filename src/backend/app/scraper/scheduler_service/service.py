@@ -1,17 +1,22 @@
+import asyncio
 import random
 from apscheduler.schedulers.base import BaseScheduler
+from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.job import Job
-from apscheduler.events import JobEvent
+from apscheduler.events import JobEvent, SchedulerEvent
 from apscheduler.events import (
     EVENT_JOB_SUBMITTED, 
     EVENT_JOB_EXECUTED, 
     EVENT_JOB_ERROR,
-    EVENT_JOB_ADDED
+    EVENT_JOB_ADDED,
+    EVENT_SCHEDULER_START
 )
 import logging
 from typing import Any
 
+from .utils import RtpiJobHelper
 from .config import (
+    settings,
     job_defaults,
     executors,
     jobstores,
@@ -27,7 +32,8 @@ class SchedulerService(object):
         self.__running_jobs = {}            #'job_id' : 'job_name'
         self.__pending_jobs = {}            #'job_id' : 'job_name'
         self.__table_updating_jobs = {}     #'job_id' : 'rtpi_job_info_id'
-        self.instance : BaseScheduler = scheduler_type()
+        #self.instance : BaseScheduler = scheduler_type()
+        self.instance: BaseScheduler = AsyncIOScheduler()
         self.number = random.randint(1, 10)
 
         self.instance.configure(
@@ -35,6 +41,14 @@ class SchedulerService(object):
             executors = executors,
             jobstores = jobstores
         )
+
+        def clear_lists():
+            """
+            Очистить списки
+            """
+            self.__pending_jobs.clear()
+            self.__running_jobs.clear()
+            self.__table_updating_jobs.clear()
 
         def count_same_jobs(
             job: Job,
@@ -47,8 +61,13 @@ class SchedulerService(object):
             if len(dict_to_search) == 0:
                 return 0
             return sum(map(lambda x : x == job.name, dict_to_search.values()))
-
+    
         #event listeners
+        def scheduler_start(event: SchedulerEvent):
+            #Очистка поля taken таблицы rtpi_job_data на старте
+            if settings.CLEAR_JOBS_ON_START.lower() == 'true':
+                RtpiJobHelper.free_job_data()
+
         def job_submit(event: JobEvent):
             if event.job_id in self.__pending_jobs:
                 j_value = self.__pending_jobs.pop(event.job_id)
@@ -88,10 +107,15 @@ class SchedulerService(object):
             #     sum(map(lambda x : x == event.job_id, self.__running_jobs)) < job.max_instances:
             #     self.instance.modify_job()
             # print(job)
-
+        
+        self.instance.add_listener(scheduler_start, EVENT_SCHEDULER_START)
         self.instance.add_listener(job_add, EVENT_JOB_ADDED)
         self.instance.add_listener(job_submit, EVENT_JOB_SUBMITTED)
         self.instance.add_listener(job_remove, EVENT_JOB_ERROR | EVENT_JOB_EXECUTED)
+
+    #Для Dependecy injection
+    def get_instance(self) -> BaseScheduler:
+        return self.instance
 
     def get_running_jobs(self):
         """
@@ -114,4 +138,4 @@ class SchedulerService(object):
             self.__table_updating_jobs.pop(job_id)
 
 
-scheduler = SchedulerService()
+scheduler_service = SchedulerService()

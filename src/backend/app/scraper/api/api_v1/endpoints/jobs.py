@@ -8,7 +8,7 @@ from sqlalchemy.orm import Session
 
 #from scraper.utils.services.scheduler_service import scheduler_service
 
-from scraper.scheduler_service import scheduler_service
+from scraper.scheduler_service.service import scheduler_service
 from scraper.scheduler_service.jobs.rtpi import (
     __spawn_get_data_jobs_job,
     create_update_table_job
@@ -59,6 +59,17 @@ async def schedules(
 router = APIRouter(
     #dependencies=[Depends(scheduler_service.scheduler_running_check)]
 )
+
+@router.get(
+    "/get_running_jobs"
+)
+async def get_cur_running_jobs(
+    #scheduler: BaseScheduler = Depends(scheduler_service.get_instance)
+):
+    """
+    Получить запущенные задачи
+    """
+    return scheduler_service.get_running_jobs()
 
 @router.post(
     "/update/{table}",

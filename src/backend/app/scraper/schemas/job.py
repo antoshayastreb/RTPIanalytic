@@ -2,7 +2,7 @@ from datetime import datetime, timedelta
 from typing import Optional, List
 from pydantic import BaseModel
 
-from scraper.utils.help_func import SerializerHelper
+from scraper.utils import SerializerHelper
 
 class JobBase(BaseModel):
     """Базовый класс информации о задаче"""

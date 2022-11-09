@@ -7,7 +7,7 @@ from sqlalchemy import select, desc
 
 from ..session import ScraperSession
 from ..utils.rtpi_helper import RtpiJobHelper
-from scraper.scheduler_service import scheduler_service
+from scraper.scheduler_service.service import scheduler_service
 from scraper.scheduler_service.config import settings
 from scraper.db.session import async_session
 from scraper.models import (
