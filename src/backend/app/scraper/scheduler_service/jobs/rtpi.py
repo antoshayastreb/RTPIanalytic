@@ -144,7 +144,7 @@ async def create_update_table_job(
         assert count
 
         await create_job(table_name, count, final_filter)
-        __spawn_get_data_jobs()
+        __spawn_get_data_jobs_job()
     except AssertionError as ex:
         raise Exception(f"При обновлении таблицы {table_name} не удалось получить кол-во строк")
     except Exception as ex:
