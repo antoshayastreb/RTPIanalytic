@@ -3,6 +3,7 @@ from fastapi import FastAPI
 
 from config import settings
 from scraper.scheduler_service import scheduler_service
+from scraper.scheduler_service.utils import RtpiJobHelper
 from api.api_v1.api import api_router
 from scraper.scheduler_service import register_scheduler_exceptions_handlers
 
@@ -31,6 +32,9 @@ async def try_to_load_scheduler():
     scheduler = scheduler_service.instance
     #app.state.scheduler_service = scheduler
     try:
+        #Очистка поля taken таблицы rtpi_job_data на старте
+        if settings.CLEAR_JOBS_ON_START.lower() == 'true':
+            await RtpiJobHelper.free_job_data_async()
         scheduler.start()
         logger.info(" Шедулер запущен ")
     except Exception as ex:

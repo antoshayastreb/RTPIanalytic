@@ -71,6 +71,7 @@ class Settings(BaseSettings):
     #Удалить задачу через ... минут
     DELETE_COMPLETE_JOB_AFTER: str = '1440'
     DELETE_STALLED_JOB_AFTER: str = '60'
+    CLEAR_JOBS_ON_START = 'True'
     #Настройки для Pydantic BaseSettings
     class Config:
         env_file = '~/.env'

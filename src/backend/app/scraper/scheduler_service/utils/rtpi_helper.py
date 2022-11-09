@@ -1,6 +1,10 @@
 from yarl import URL
+from sqlalchemy import update
+from scraper.db.session import sync_session, async_session
+
 from .job_helper import JobHelper
 from .misc import Ordering
+from scraper.models import RtpiJobData
 
 class RtpiJobHelper(JobHelper):
         
@@ -84,4 +88,40 @@ class RtpiJobHelper(JobHelper):
                 return f'moment=gte.{value}'
             if self.table_name == 'rtpi_price':
                 return f'date_observe=gte.{value}'
-        return None    
+        return None
+
+    def free_job_data():
+        """
+        'Освободить' записи в таблице rtpi_job_data
+        """
+        stmt = (
+            update(RtpiJobData)
+            .where(RtpiJobData.taken == True)
+            .values(taken = None)
+        )
+        session = sync_session()
+        try:
+            with session.begin():
+                session.execute(stmt)
+        except Exception as ex:
+            raise ex
+        finally:
+            session.close()
+
+    async def free_job_data_async():
+        """
+        'Освободить' записи в таблице rtpi_job_data
+        """
+        stmt = (
+            update(RtpiJobData)
+            .where(RtpiJobData.taken == True)
+            .values(taken = None)
+        )
+        async with async_session() as session:
+            try:
+                async with session.begin():
+                    await session.execute(stmt)
+            except Exception as ex:
+                raise ex
+            finally:
+                await session.close()

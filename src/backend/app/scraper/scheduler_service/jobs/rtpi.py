@@ -1,7 +1,7 @@
 import asyncpg
 from typing import Any
 from sqlalchemy import select, desc
-import uuid
+#import uuid
 
 #import logging
 
@@ -18,20 +18,23 @@ from scraper.models import (
     RtpiProductName
 )
 
-def __spawn_get_data_jobs():
+def __spawn_get_data_jobs_job(
+    **kwargs
+):
     """Создать задачи на получение данных"""
     scheduler = scheduler_service.instance
     max_jobs = int(settings.MAX_CONCURENT_JOBS)
     for _ in range(max_jobs):
         scheduler.add_job(
             __get_data_job,
-            max_instances=int(settings.MAX_CONCURENT_JOBS)
+            max_instances=max_jobs
         )
 
 async def create_update_table_job(
     table_name: str,
     fetch_all: bool = False,
-    hard_filter: str = None
+    hard_filter: str = None,
+    **kwargs
 ):
     """Создание задачи для обновления указанной таблицы"""
     try:
@@ -147,7 +150,9 @@ async def create_update_table_job(
     except Exception as ex:
         raise ex
 
-async def __get_data_job():
+async def __get_data_job(
+    **kwargs
+):
     """Основной метод получения информации из API"""
     async def asyncpg_insert(table_name: str, content: Any):
         """Базированный гигачадовый bulk upsert через asyncpg"""
@@ -261,7 +266,9 @@ async def __get_data_job():
 
     rtpi_job_data: RtpiJobData = await get_request_info()
     if rtpi_job_data:
+        scheduler_service.add_updating_table_job(kwargs['job_id'], rtpi_job_data.id)
         await get_content(rtpi_job_data)
+        scheduler_service.remove_updating_table_job(kwargs['job_id'])
         schedule_self()
 
 

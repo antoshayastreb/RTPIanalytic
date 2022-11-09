@@ -10,7 +10,7 @@ from sqlalchemy.orm import Session
 
 from scraper.scheduler_service import scheduler_service
 from scraper.scheduler_service.jobs.rtpi import (
-    __spawn_get_data_jobs,
+    __spawn_get_data_jobs_job,
     create_update_table_job
 ) 
 
@@ -89,7 +89,7 @@ async def spawn__get_data():
     """Создать задачи для получения данных"""
     try:
         scheduler_service.instance.add_job(
-            __spawn_get_data_jobs,
+            __spawn_get_data_jobs_job,
         )
     except Exception as ex:
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
