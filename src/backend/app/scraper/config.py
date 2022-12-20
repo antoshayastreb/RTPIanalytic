@@ -57,6 +57,7 @@ class Settings(BaseSettings):
     #Настройки для APScheduler
     JOBSTORE_TABLE: str = 'job_store'
     #Настройка HTTP Basic Auth
+    ENABLE_AUTH: str = 'True'
     AUTH_USERNAME: str = 'admin'
     AUTH_PASSWORD: str = 'adminpassword'
     #Настройка, регулирующая сколько одновременных задач будет

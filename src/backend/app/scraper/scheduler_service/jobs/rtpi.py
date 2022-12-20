@@ -84,7 +84,7 @@ async def create_update_table_job(
                             limit(1)
                         case _:
                             None
-                    if stmt:
+                    if stmt != None:
                         return (await session.scalars(stmt)).first().strftime('%Y-%m-%dT%H:%M:%S')
                     return None
                 except Exception as ex:
@@ -133,7 +133,7 @@ async def create_update_table_job(
         #то есть ситуация равносильная 'fetch_all = False'
         #иначе тянем последнюю дату по таблице из базы 
         update_filter = None if fetch_all or hard_filter else \
-        RtpiJobHelper.make_update_filter(await get_last_date_async(table_name))
+        RtpiJobHelper.make_update_filter(table_name, await get_last_date_async(table_name))
         #Собираем финальный фильтр
         final_filter = RtpiJobHelper.make_filter(
             order_filter,
